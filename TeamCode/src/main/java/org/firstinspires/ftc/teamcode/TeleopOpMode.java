@@ -6,6 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 @TeleOp(name="TeleopOpMode")
 public class TeleopOpMode extends LinearOpMode {
     @Override
+
+    DCMotor leftMotor;
     public void runOpMode() {
         // Initialize hardware and use hardwareMap
 
