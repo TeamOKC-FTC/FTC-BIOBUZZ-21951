@@ -81,12 +81,16 @@ public class Match1Trial extends LinearOpMode {
     private DcMotorEx shooter        =null;
     private Servo     rightFlipper   =null;
     private Servo     leftFlipper    =null;
+    private Servo     gate           =null;
     private double launcherRPMcommand=0;
     private int shooterSpeed=2000*28/60;//RPM
     private boolean shooteron=false;
     private boolean dpadlastpressed= false;
     private boolean ylastpressed= false;
-    private boolean flipperstowed = true;
+    private boolean xlastpressed= false;
+    private boolean flipperleftstowed = true;
+    private boolean flipperrightstowed = true;
+    private boolean gateBlocked = true;
     private boolean rightbumperlastpressed = false;
     private boolean leftbumperlastpressed = false;
     @Override
@@ -102,6 +106,7 @@ public class Match1Trial extends LinearOpMode {
         shooter = hardwareMap.get(DcMotorEx.class, "shooter");
         rightFlipper = hardwareMap.get(Servo.class, "rightFlipper");
         leftFlipper = hardwareMap.get(Servo.class, "leftFlipper");
+        gate = hardwareMap.get(Servo.class, "gate");
         // ########################################################################################
         // !!!!!          IMPORTANT Drive Information. Test your motor directions.            !!!!!
         // ########################################################################################
@@ -118,6 +123,9 @@ public class Match1Trial extends LinearOpMode {
         backRightDrive.setDirection(DcMotor.Direction.FORWARD);
         intake.setDirection(DcMotor.Direction.FORWARD);
         shooter.setDirection(DcMotorEx.Direction.REVERSE);
+        rightFlipper.setDirection(Servo.Direction.FORWARD);
+        leftFlipper.setDirection(Servo.Direction.REVERSE);
+        gate.setDirection(Servo.Direction.FORWARD);
 
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -170,6 +178,9 @@ public class Match1Trial extends LinearOpMode {
             if (!gamepad1.y) {
                 ylastpressed = false;
             }
+            if (!gamepad1.x) {
+                xlastpressed = false;
+            }
             if (gamepad1.right_trigger > .2) {
 
                 intake.setPower(gamepad1.right_trigger);
@@ -203,25 +214,35 @@ public class Match1Trial extends LinearOpMode {
             }
             if (gamepad1.right_bumper && !rightbumperlastpressed) {
                 rightbumperlastpressed = true;
-                if (flipperstowed) {
+                if (flipperrightstowed) {
                     rightFlipper.setPosition(1.0);
-                    flipperstowed = false;
+                    flipperrightstowed = false;
                 } else {
                     rightFlipper.setPosition(0.0);
-                    flipperstowed = true;
+                    flipperrightstowed = true;
                 }
             }
             if (gamepad1.left_bumper && !leftbumperlastpressed) {
                 leftbumperlastpressed = true;
-                if (flipperstowed) {
+                if (flipperleftstowed) {
                     leftFlipper.setPosition(1.0);//right
-                    flipperstowed = false;
+                    flipperleftstowed = false;
                 } else {
                     leftFlipper.setPosition(0.0);//left
-                    flipperstowed = true;
+                    flipperleftstowed = true;
                 }
             }
 
+            if (gamepad1.x && !xlastpressed) {
+                xlastpressed = true;
+                if (gateBlocked) {
+                    gate.setPosition(0.0);//unblock
+                     gateBlocked= false;
+                } else {
+                    gate.setPosition(1.0);//block
+                    gateBlocked = true;
+                }
+            }
             // This is test code:
             //
             // Uncomment the following code to test your motor directions.
