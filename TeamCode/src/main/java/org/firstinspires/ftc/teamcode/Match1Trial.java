@@ -38,35 +38,6 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
 
-
-/*
- * This file contains an example of a Linear "OpMode".
- * An OpMode is a 'program' that runs in either the autonomous or the teleop period of an FTC match.
- * The names of OpModes appear on the menu of the FTC Driver Station.
- * When a selection is made from the menu, the corresponding OpMode is executed.
- *
- * This particular OpMode illustrates driving a 4-motor Omni-Directional (or Holonomic) robot.
- * This code will work with either a Mecanum-Drive or an X-Drive train.
- * Both of these drives are illustrated at https://gm0.org/en/latest/docs/robot-design/drivetrains/holonomic.html
- * Note that a Mecanum drive must display an X roller-pattern when viewed from above.
- *
- * Also note that it is critical to set the correct rotation direction for each motor.  See details below.
- *
- * Holonomic drives provide the ability for the robot to move in three axes (directions) simultaneously.
- * Each motion axis is controlled by one Joystick axis.
- *
- * 1) Axial:    Driving forward and backward               Left-joystick Forward/Backward
- * 2) Lateral:  Strafing right and left                     Left-joystick Right and Left
- * 3) Yaw:      Rotating Clockwise and counter clockwise    Right-joystick Right and Left
- *
- * This code is written assuming that the right-side motors need to be reversed for the robot to drive forward.
- * When you first test your robot, if it moves backward when you push the left stick forward, then you must flip
- * the direction of all 4 motors (see code below).
- *
- * Use Android Studio to Copy this Class, and Paste it into your team's code folder with a new name.
- * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list
- */
-
 @TeleOp(name="Match1Triall", group="Linear OpMode")
 //@Disabled
 public class Match1Trial extends LinearOpMode {
@@ -82,17 +53,24 @@ public class Match1Trial extends LinearOpMode {
     private Servo     rightFlipper   =null;
     private Servo     leftFlipper    =null;
     private Servo     gate           =null;
-    private double launcherRPMcommand=0;
     private int shooterSpeed=2000*28/60;//RPM
     private boolean shooteron=false;
-    private boolean dpadlastpressed= false;
-    private boolean ylastpressed= false;
-    private boolean xlastpressed= false;
     private boolean flipperleftstowed = true;
     private boolean flipperrightstowed = true;
     private boolean gateBlocked = true;
-    private boolean rightbumperlastpressed = false;
-    private boolean leftbumperlastpressed = false;
+
+    // Button Indices
+    private final int BTN_DPAD_UP = 0;
+    private final int BTN_DPAD_DOWN = 1;
+    private final int BTN_Y = 2;
+    private final int BTN_RIGHT_BUMPER = 3;
+    private final int BTN_LEFT_BUMPER = 4;
+    private final int BTN_X = 5;
+
+    private final double[] buttonLastPressTime = new double[6];
+    private final boolean[] buttonLastState = new boolean[6];
+
+
     @Override
     public void runOpMode() {
 
@@ -107,16 +85,7 @@ public class Match1Trial extends LinearOpMode {
         rightFlipper = hardwareMap.get(Servo.class, "rightFlipper");
         leftFlipper = hardwareMap.get(Servo.class, "leftFlipper");
         gate = hardwareMap.get(Servo.class, "gate");
-        // ########################################################################################
-        // !!!!!          IMPORTANT Drive Information. Test your motor directions.            !!!!!
-        // ########################################################################################
-        // Most robots need the motors on one side to be reversed to drive forward.
-        // The motor reversals shown here are for a "direct drive" robot (the wheels turn the same direction as the motor shaft)
-        // If your robot has additional gear reductions or uses a right-angled drive, it's important to ensure
-        // that your motors are turning in the correct direction.  So, start out with the reversals here, BUT
-        // when you first test your robot, push the left joystick forward and observe the direction the wheels turn.
-        // Reverse the direction (flip FORWARD <-> REVERSE ) of any wheel that runs backward
-        // Keep testing until ALL the wheels move the robot forward when you push the left joystick forward.
+
         frontLeftDrive.setDirection(DcMotor.Direction.REVERSE);
         backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
         frontRightDrive.setDirection(DcMotor.Direction.FORWARD);
@@ -126,6 +95,10 @@ public class Match1Trial extends LinearOpMode {
         rightFlipper.setDirection(Servo.Direction.FORWARD);
         leftFlipper.setDirection(Servo.Direction.REVERSE);
         gate.setDirection(Servo.Direction.FORWARD);
+
+        rightFlipper.setPosition(0.0);  //stowed
+        leftFlipper.setPosition(0.0);   //stowed
+        gate.setPosition(1.0);          //blocked
 
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
@@ -166,54 +139,37 @@ public class Match1Trial extends LinearOpMode {
                 backLeftPower /= max;
                 backRightPower /= max;
             }
-            if (!gamepad1.dpad_up && !gamepad1.dpad_down) {
-                dpadlastpressed = false;
-            }
-            if (!gamepad1.right_bumper) {
-                rightbumperlastpressed = false;
-            }
-            if (!gamepad1.left_bumper) {
-                leftbumperlastpressed = false;
-            }
-            if (!gamepad1.y) {
-                ylastpressed = false;
-            }
-            if (!gamepad1.x) {
-                xlastpressed = false;
-            }
-            if (gamepad1.right_trigger > .2) {
 
+            if (gamepad1.right_trigger > .2) {
                 intake.setPower(gamepad1.right_trigger);
             } else {
                 intake.setPower(-gamepad1.left_trigger);
             }
-            if (gamepad1.dpad_up && !dpadlastpressed) {
-                shooterSpeed = shooterSpeed + 25;
-                dpadlastpressed = true;
+            
+            if (isPressed(gamepad1.dpad_up, BTN_DPAD_UP)) {
+                shooterSpeed = shooterSpeed + 25*28/60;
                 if (shooteron) {
                     shooter.setVelocity(shooterSpeed);
                 }
             }
-            if (gamepad1.dpad_down && !dpadlastpressed) {
-                shooterSpeed = shooterSpeed - 25;
-                dpadlastpressed = true;
+            
+            if (isPressed(gamepad1.dpad_down, BTN_DPAD_DOWN)) {
+                shooterSpeed = shooterSpeed - 25*28/60;
                 if (shooteron) {
                     shooter.setVelocity(shooterSpeed);
                 }
             }
 
-            if (gamepad1.y && !shooteron && !ylastpressed) {
-                shooter.setVelocity(shooterSpeed);
-                shooteron = true;
-                ylastpressed = true;
+            if (isPressed(gamepad1.y, BTN_Y)) {
+                if (!shooteron) {
+                    shooter.setVelocity(shooterSpeed);
+                    shooteron = true;
+                } else {
+                    shooter.setVelocity(0);
+                    shooteron = false;
+                }
             }
-            if (gamepad1.y && shooteron && !ylastpressed) {
-                shooter.setVelocity(0);
-                shooteron = false;
-                ylastpressed = true;
-            }
-            if (gamepad1.right_bumper && !rightbumperlastpressed) {
-                rightbumperlastpressed = true;
+            if (isPressed(gamepad1.right_bumper, BTN_RIGHT_BUMPER)) {
                 if (flipperrightstowed) {
                     rightFlipper.setPosition(1.0);
                     flipperrightstowed = false;
@@ -222,8 +178,7 @@ public class Match1Trial extends LinearOpMode {
                     flipperrightstowed = true;
                 }
             }
-            if (gamepad1.left_bumper && !leftbumperlastpressed) {
-                leftbumperlastpressed = true;
+            if (isPressed(gamepad1.left_bumper, BTN_LEFT_BUMPER)) {
                 if (flipperleftstowed) {
                     leftFlipper.setPosition(1.0);//right
                     flipperleftstowed = false;
@@ -233,8 +188,7 @@ public class Match1Trial extends LinearOpMode {
                 }
             }
 
-            if (gamepad1.x && !xlastpressed) {
-                xlastpressed = true;
+            if (isPressed(gamepad1.x, BTN_X)) {
                 if (gateBlocked) {
                     gate.setPosition(0.0);//unblock
                      gateBlocked= false;
@@ -243,22 +197,6 @@ public class Match1Trial extends LinearOpMode {
                     gateBlocked = true;
                 }
             }
-            // This is test code:
-            //
-            // Uncomment the following code to test your motor directions.
-            // Each button should make the corresponding motor run FORWARD.
-            //   1) First get all the motors to take to correct positions on the robot
-            //      by adjusting your Robot Configuration if necessary.
-            //   2) Then make sure they run in the correct direction by modifying the
-            //      the setDirection() calls above.
-            // Once the correct motors move in the correct direction re-comment this code.
-
-            /*
-            frontLeftPower  = gamepad1.x ? 1.0 : 0.0;  // X gamepad
-            backLeftPower   = gamepad1.a ? 1.0 : 0.0;  // A gamepad
-            frontRightPower = gamepad1.y ? 1.0 : 0.0;  // Y gamepad
-            backRightPower  = gamepad1.b ? 1.0 : 0.0;  // B gamepad
-            */
 
             // Send calculated power to wheels
             frontLeftDrive.setPower(frontLeftPower);
@@ -280,7 +218,18 @@ public class Match1Trial extends LinearOpMode {
             telemetry.update();
         }
     }
+
+    private boolean isPressed(boolean currentState, int buttonIndex) {
+        double now = runtime.milliseconds();
+        if (currentState && !buttonLastState[buttonIndex] && (now - buttonLastPressTime[buttonIndex] > 250)) {
+            buttonLastState[buttonIndex] = true;
+            buttonLastPressTime[buttonIndex] = now;
+            return true;
+        }
+        if (!currentState) {
+            buttonLastState[buttonIndex] = false;
+        }
+        return false;
+    }
+
 }
-
-
-        
