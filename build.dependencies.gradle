@@ -17,4 +17,6 @@ dependencies {
 
     implementation 'com.pedropathing:revhub:3.0.1'
     implementation 'com.pedropathing:tuning:1.0.1'
+
+    testImplementation 'junit:junit:4.13.2'
 }

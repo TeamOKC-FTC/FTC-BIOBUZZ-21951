@@ -82,12 +82,13 @@ public class Match1Trial extends LinearOpMode {
     private Servo     rightFlipper   =null;
     private Servo     leftFlipper    =null;
     private double launcherRPMcommand=0;
-    private int shooterSpeed=2000*24/60;//RPM
+    private int shooterSpeed=2000*28/60;//RPM
     private boolean shooteron=false;
     private boolean dpadlastpressed= false;
     private boolean ylastpressed= false;
     private boolean flipperstowed = true;
     private boolean rightbumperlastpressed = false;
+    private boolean leftbumperlastpressed = false;
     @Override
     public void runOpMode() {
 
@@ -118,7 +119,7 @@ public class Match1Trial extends LinearOpMode {
         intake.setDirection(DcMotor.Direction.FORWARD);
         shooter.setDirection(DcMotorEx.Direction.REVERSE);
 
-        shooter.setVelocityPIDFCoefficients(350,0,0,12.53);
+        shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
@@ -134,16 +135,16 @@ public class Match1Trial extends LinearOpMode {
             double max;
 
             // POV Mode uses left joystick to go forward & strafe, and right joystick to rotate.
-            double axial   = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
-            double lateral =  gamepad1.left_stick_x;
-            double yaw     =  gamepad1.right_stick_x;
+            double axial = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
+            double lateral = gamepad1.left_stick_x;
+            double yaw = gamepad1.right_stick_x;
 
             // Combine the joystick requests for each axis-motion to determine each wheel's power.
             // Set up a variable for each drive wheel to save the power level for telemetry.
-            double frontLeftPower  = axial + lateral + yaw;
+            double frontLeftPower = axial + lateral + yaw;
             double frontRightPower = axial - lateral - yaw;
-            double backLeftPower   = axial - lateral + yaw;
-            double backRightPower  = axial + lateral - yaw;
+            double backLeftPower = axial - lateral + yaw;
+            double backRightPower = axial + lateral - yaw;
 
             // Normalize the values so no wheel power exceeds 100%
             // This ensures that the robot maintains the desired motion.
@@ -152,63 +153,75 @@ public class Match1Trial extends LinearOpMode {
             max = Math.max(max, Math.abs(backRightPower));
 
             if (max > 1.0) {
-                frontLeftPower  /= max;
+                frontLeftPower /= max;
                 frontRightPower /= max;
-                backLeftPower   /= max;
-                backRightPower  /= max;
+                backLeftPower /= max;
+                backRightPower /= max;
             }
-            if(!gamepad1.dpad_up && !gamepad1.dpad_down){
-                dpadlastpressed=false;
+            if (!gamepad1.dpad_up && !gamepad1.dpad_down) {
+                dpadlastpressed = false;
             }
-            if(!gamepad1.right_bumper){
+            if (!gamepad1.right_bumper) {
                 rightbumperlastpressed = false;
             }
-            if(!gamepad1.y){
-                ylastpressed =false;
+            if (!gamepad1.left_bumper) {
+                leftbumperlastpressed = false;
             }
-            if (gamepad1.right_trigger>.2) {
+            if (!gamepad1.y) {
+                ylastpressed = false;
+            }
+            if (gamepad1.right_trigger > .2) {
 
                 intake.setPower(gamepad1.right_trigger);
+            } else {
+                intake.setPower(-gamepad1.left_trigger);
             }
-           else{
-               intake.setPower( -gamepad1.left_trigger);
-            }
-            if (gamepad1.dpad_up && !dpadlastpressed){
-                shooterSpeed=shooterSpeed+25;
-                dpadlastpressed=true;
-                if(shooteron){
+            if (gamepad1.dpad_up && !dpadlastpressed) {
+                shooterSpeed = shooterSpeed + 25;
+                dpadlastpressed = true;
+                if (shooteron) {
                     shooter.setVelocity(shooterSpeed);
                 }
             }
-            if (gamepad1.dpad_down && !dpadlastpressed){
-                shooterSpeed=shooterSpeed-25;
-                dpadlastpressed=true;
-                if(shooteron){
+            if (gamepad1.dpad_down && !dpadlastpressed) {
+                shooterSpeed = shooterSpeed - 25;
+                dpadlastpressed = true;
+                if (shooteron) {
                     shooter.setVelocity(shooterSpeed);
                 }
             }
 
-            if(gamepad1.y && !shooteron && !ylastpressed){
+            if (gamepad1.y && !shooteron && !ylastpressed) {
                 shooter.setVelocity(shooterSpeed);
-                shooteron=true;
-                ylastpressed=true;
+                shooteron = true;
+                ylastpressed = true;
             }
-            if(gamepad1.y && shooteron && !ylastpressed){
+            if (gamepad1.y && shooteron && !ylastpressed) {
                 shooter.setVelocity(0);
-                shooteron=false;
-                ylastpressed=true;
+                shooteron = false;
+                ylastpressed = true;
             }
-            if(gamepad1.right_bumper && !rightbumperlastpressed){
+            if (gamepad1.right_bumper && !rightbumperlastpressed) {
                 rightbumperlastpressed = true;
-                if(flipperstowed){
+                if (flipperstowed) {
                     rightFlipper.setPosition(1.0);
                     flipperstowed = false;
-                }
-                else{
+                } else {
                     rightFlipper.setPosition(0.0);
                     flipperstowed = true;
                 }
             }
+            if (gamepad1.left_bumper && !leftbumperlastpressed) {
+                leftbumperlastpressed = true;
+                if (flipperstowed) {
+                    leftFlipper.setPosition(1.0);//right
+                    flipperstowed = false;
+                } else {
+                    leftFlipper.setPosition(0.0);//left
+                    flipperstowed = true;
+                }
+            }
+
             // This is test code:
             //
             // Uncomment the following code to test your motor directions.
@@ -233,17 +246,20 @@ public class Match1Trial extends LinearOpMode {
             backRightDrive.setPower(backRightPower);
 
 
-            telemetry.addData("right front power=",frontRightPower);
-            telemetry.addData("left front power=",frontLeftPower);
-            telemetry.addData("right back power=",backRightPower);
-            telemetry.addData("left back power=",backLeftPower);
-            if(shooteron){
-                telemetry.addData("RPMcommand=",shooterSpeed*60/24);
+            telemetry.addData("right front power=", frontRightPower);
+            telemetry.addData("left front power=", frontLeftPower);
+            telemetry.addData("right back power=", backRightPower);
+            telemetry.addData("left back power=", backLeftPower);
+            if (shooteron) {
+                telemetry.addData("RPMcommand=", shooterSpeed * 60 / 28);
+            } else {
+                telemetry.addData("RPMcommand=", 0);
             }
-            else{
-                telemetry.addData("RPMcommand=",0);
-            }
-            telemetry.addData("RPMActual=",shooter.getVelocity()*60/24);
+            telemetry.addData("RPMActual=", shooter.getVelocity() * 60 / 28);
             telemetry.update();
         }
-    }}
+    }
+}
+
+
+        
