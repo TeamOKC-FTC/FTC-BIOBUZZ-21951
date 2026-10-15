@@ -38,7 +38,31 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.Servo;
 
-@TeleOp(name="Match1Triall", group="Linear OpMode")
+/*
+ * ROBOT OPERATOR CONTROLS (Gamepad 1):
+ * --------------------------------------------------------------------------------
+ * DRIVETRAIN (Mecanum Drive):
+ *   - Left Stick Y:        Drive Forward / Backward
+ *   - Left Stick X:        Strafe Left / Right
+ *   - Right Stick X:       Rotate Clockwise / Counter-Clockwise
+ *
+ * INTAKE:
+ *   - Right Trigger (>0.2): Press to run Intake FORWARD (analog variable speed)
+ *   - Left Trigger: (>0.2): Press to run Intake REVERSE / OUTTAKE (analog variable speed)
+ *
+ * SHOOTER:
+ *   - Y Button:            Press to TOGGLE Shooter ON / OFF
+ *   - D-Pad Up:            Press to INCREASE target shooter speed
+ *   - D-Pad Down:          Press to DECREASE target shooter speed
+ *
+ * FLIPPERS & GATE:
+ *   - Right Bumper:        Press to TOGGLE Right Flipper (Deployed <-> Stowed)
+ *   - Left Bumper:         Press to TOGGLE Left Flipper (Deployed <-> Stowed)
+ *   - X Button:            Press to TOGGLE Gate (Unblocked <-> Blocked)
+ * --------------------------------------------------------------------------------
+ */
+
+@TeleOp(name="Match1Trial", group="Linear OpMode")
 //@Disabled
 public class Match1Trial extends LinearOpMode {
 
@@ -53,7 +77,7 @@ public class Match1Trial extends LinearOpMode {
     private Servo     rightFlipper   =null;
     private Servo     leftFlipper    =null;
     private Servo     gate           =null;
-    private int shooterSpeed=2000*28/60;//RPM
+    private int shooterSpeed=2500*28/60;//RPM
     private boolean shooteron=false;
     private boolean flipperleftstowed = true;
     private boolean flipperrightstowed = true;
@@ -142,19 +166,19 @@ public class Match1Trial extends LinearOpMode {
 
             if (gamepad1.right_trigger > .2) {
                 intake.setPower(gamepad1.right_trigger);
-            } else {
+            } else if (gamepad1.left_trigger > .2) {
                 intake.setPower(-gamepad1.left_trigger);
             }
             
             if (isPressed(gamepad1.dpad_up, BTN_DPAD_UP)) {
-                shooterSpeed = shooterSpeed + 25*28/60;
+                shooterSpeed = shooterSpeed + 25*28/60;  //25 rpm steps
                 if (shooteron) {
                     shooter.setVelocity(shooterSpeed);
                 }
             }
             
             if (isPressed(gamepad1.dpad_down, BTN_DPAD_DOWN)) {
-                shooterSpeed = shooterSpeed - 25*28/60;
+                shooterSpeed = shooterSpeed - 25*28/60;  //25 rpm steps
                 if (shooteron) {
                     shooter.setVelocity(shooterSpeed);
                 }
@@ -219,6 +243,7 @@ public class Match1Trial extends LinearOpMode {
         }
     }
 
+    //the following function debounces switches and requires a delay between presses to prevent issues with chattering switches
     private boolean isPressed(boolean currentState, int buttonIndex) {
         double now = runtime.milliseconds();
         if (currentState && !buttonLastState[buttonIndex] && (now - buttonLastPressTime[buttonIndex] > 250)) {
