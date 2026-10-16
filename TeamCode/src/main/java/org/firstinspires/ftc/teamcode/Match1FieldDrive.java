@@ -88,10 +88,11 @@ public class Match1FieldDrive extends LinearOpMode {
 
     // goBILDA Pinpoint Odometry Computer
     private GoBildaPinpointDriver pinpoint = null;
-    private double targetHeading = 0.0; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
 
     private int shooterSpeed = 2500 * 28 / 60; // RPM converted to ticks/sec
     private boolean shooteron = false;
+    private double filteredShooterRpm = 0;
+    private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
     private boolean flipperleftstowed = true;
     private boolean flipperrightstowed = true;
     private boolean gateBlocked = true;
@@ -115,6 +116,11 @@ public class Match1FieldDrive extends LinearOpMode {
     private double autoLeaveXInches = -72.0;
     private double autoLeaveYInches = -18.0;
     private double autoLeaveHeadingDegrees = 0.0; // 0 deg = Facing Forward away from driver
+
+    private double targetHeading = autoLeaveHeadingDegrees * Math.PI / 180; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
+
+
+
 
     @Override
     public void runOpMode() {
@@ -140,8 +146,8 @@ public class Match1FieldDrive extends LinearOpMode {
         leftFlipper.setDirection(Servo.Direction.REVERSE);
         gate.setDirection(Servo.Direction.FORWARD);
 
-        rightFlipper.setPosition(0.0);  // stowed
-        leftFlipper.setPosition(0.0);   // stowed
+        //rightFlipper.setPosition(0.0);  // stowed
+        //leftFlipper.setPosition(0.0);   // stowed
         gate.setPosition(1.0);          // blocked
 
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
@@ -151,9 +157,12 @@ public class Match1FieldDrive extends LinearOpMode {
         // Initialize goBILDA Pinpoint with pod offsets and starting pose (-72 in, -18 in, 0 deg)
         initPinpoint(xPodOffsetInches, yPodOffsetInches, autoLeaveXInches, autoLeaveYInches, autoLeaveHeadingDegrees);
 
-        // Wait for the game to start (driver presses START)
-        telemetry.addData("Status", "Initialized Pinpoint & Servos");
-        telemetry.update();
+        // Display repeating position telemetry during INIT phase until driver presses START
+        while (!isStarted() && !isStopRequested()) {
+            pinpoint.update();
+            updateTelemetry("Initialized - Waiting for Start");
+            sleep(20);
+        }
 
         waitForStart();
         runtime.reset();
@@ -199,20 +208,20 @@ public class Match1FieldDrive extends LinearOpMode {
             // Flippers toggle
             if (isPressed(gamepad1.right_bumper, BTN_RIGHT_BUMPER)) {
                 if (flipperrightstowed) {
-                    rightFlipper.setPosition(1.0);
+                    rightFlipper.setPosition(0.0);
                     flipperrightstowed = false;
                 } else {
-                    rightFlipper.setPosition(0.0);
+                    rightFlipper.setPosition(1.0);
                     flipperrightstowed = true;
                 }
             }
 
             if (isPressed(gamepad1.left_bumper, BTN_LEFT_BUMPER)) {
                 if (flipperleftstowed) {
-                    leftFlipper.setPosition(1.0);
+                    leftFlipper.setPosition(0.0);
                     flipperleftstowed = false;
                 } else {
-                    leftFlipper.setPosition(0.0);
+                    leftFlipper.setPosition(1.0);
                     flipperleftstowed = true;
                 }
             }
@@ -229,20 +238,31 @@ public class Match1FieldDrive extends LinearOpMode {
             }
 
             // Telemetry feedback
-            Pose2D pose = pinpoint.getPosition();
-            telemetry.addData("X (in)", pose.getX(DistanceUnit.INCH));
-            telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
-            telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
-            telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
-            telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
-            if (shooteron) {
-                telemetry.addData("RPMcommand=", shooterSpeed * 60 / 28);
-            } else {
-                telemetry.addData("RPMcommand=", 0);
-            }
-            telemetry.addData("RPMActual=", shooter.getVelocity() * 60 / 28);
-            telemetry.update();
+            updateTelemetry("Running");
         }
+    }
+
+    /**
+     * Updates telemetry data for Pinpoint pose, target heading, shooter speed, and status.
+     * @param status Current status message
+     */
+    private void updateTelemetry(String status) {
+        Pose2D pose = pinpoint.getPosition();
+        telemetry.addData("Status", status);
+        telemetry.addData("X (in)", pose.getX(DistanceUnit.INCH));
+        telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
+        telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
+        telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
+        telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
+        if (shooteron) {
+            telemetry.addData("RPMcommand=", shooterSpeed * 60 / 28);
+        } else {
+            telemetry.addData("RPMcommand=", 0);
+        }
+        double rawRpm = shooter.getVelocity() * 60 / 28;
+        filteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - filteredShooterRpm);
+        telemetry.addData("RPMActual=", filteredShooterRpm);
+        telemetry.update();
     }
 
     /**
@@ -285,7 +305,7 @@ public class Match1FieldDrive extends LinearOpMode {
             // Hold last target heading when stick is released
             double kP = 1.0;
             double rawYaw = headingError * kP;
-            yaw = Math.max(-0.5, Math.min(0.5, rawYaw));
+            yaw = Math.max(-0.3, Math.min(0.3, rawYaw));
         }
 
         // Combine joystick requests for Mecanum wheel powers
