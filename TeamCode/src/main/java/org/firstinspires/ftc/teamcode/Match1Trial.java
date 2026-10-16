@@ -120,8 +120,8 @@ public class Match1Trial extends LinearOpMode {
         leftFlipper.setDirection(Servo.Direction.REVERSE);
         gate.setDirection(Servo.Direction.FORWARD);
 
-        rightFlipper.setPosition(0.0);  //stowed
-        leftFlipper.setPosition(0.0);   //stowed
+        //rightFlipper.setPosition(1.0);  //stowed
+        //leftFlipper.setPosition(1.0);   //stowed
         gate.setPosition(1.0);          //blocked
 
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
@@ -166,7 +166,7 @@ public class Match1Trial extends LinearOpMode {
 
             if (gamepad1.right_trigger > .2) {
                 intake.setPower(gamepad1.right_trigger);
-            } else if (gamepad1.left_trigger > .2) {
+            } else{
                 intake.setPower(-gamepad1.left_trigger);
             }
             
@@ -195,19 +195,19 @@ public class Match1Trial extends LinearOpMode {
             }
             if (isPressed(gamepad1.right_bumper, BTN_RIGHT_BUMPER)) {
                 if (flipperrightstowed) {
-                    rightFlipper.setPosition(1.0);
+                    rightFlipper.setPosition(0.0);
                     flipperrightstowed = false;
                 } else {
-                    rightFlipper.setPosition(0.0);
+                    rightFlipper.setPosition(1.0);
                     flipperrightstowed = true;
                 }
             }
             if (isPressed(gamepad1.left_bumper, BTN_LEFT_BUMPER)) {
                 if (flipperleftstowed) {
-                    leftFlipper.setPosition(1.0);//right
+                    leftFlipper.setPosition(0.0);//right
                     flipperleftstowed = false;
                 } else {
-                    leftFlipper.setPosition(0.0);//left
+                    leftFlipper.setPosition(1.0);//left
                     flipperleftstowed = true;
                 }
             }
