@@ -109,12 +109,12 @@ public class Match1FieldDrive extends LinearOpMode {
     private final boolean[] buttonLastState = new boolean[6];
 
     // Pinpoint Pod Offsets (in Inches)
-    private double xPodOffsetInches = -3.307; // X pod offset + is left sideways from robot center (-84 mm)
-    private double yPodOffsetInches = -6.614; // Y pod offset + is forward from robot center (-168 mm)
+    private double xPodOffsetInches = -3.600; // X pod offset + is left sideways from robot center (-84 mm)
+    private double yPodOffsetInches = -(17/2-2); // Y pod offset + is forward from robot center (-168 mm)
 
     // Starting Match Pose
-    private double autoLeaveXInches = -72.0;
-    private double autoLeaveYInches = -18.0;
+    private double autoLeaveXInches = -0.00;
+    private double autoLeaveYInches = -0.00;
     private double autoLeaveHeadingDegrees = 0.0; // 0 deg = Facing Forward away from driver
 
     private double targetHeading = autoLeaveHeadingDegrees * Math.PI / 180; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
@@ -127,7 +127,7 @@ public class Match1FieldDrive extends LinearOpMode {
     private static final double MAX_TURN_POWER = 0.4;  // base correction power ceiling, reached by ~16 deg error
     private static final double HEADING_KP = 1.43;     // tuned so ~10 deg error yields ~0.25 power at base aggression
     private static final double HEADING_TOLERANCE_DEGREES = 2.0; // stop correcting once within this residual error
-    private static final double MAX_TURN_AGGRESSION = 2.5; // pushing the stick to full deflection scales gain/ceiling up to this factor (reaches full motor power)
+    private static final double MAX_TURN_AGGRESSION = 1.5; // pushing the stick to full deflection scales gain/ceiling up to this factor (reaches full motor power)
 
 
 
@@ -375,11 +375,11 @@ public class Match1FieldDrive extends LinearOpMode {
         pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
 
         // Set odometry pod offsets in INCHES relative to center of robot
-        pinpoint.setOffsets(xPodOffsetInches, yPodOffsetInches, DistanceUnit.INCH);
+        pinpoint.setOffsets( 25.4*xPodOffsetInches, 25.4*yPodOffsetInches, DistanceUnit.MM);
 
         // Set encoder pod model and directions
         pinpoint.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
-        pinpoint.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.FORWARD);
+        pinpoint.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
         // Reset IMU and position, then wait 300ms for onboard IMU calibration to complete
         pinpoint.resetPosAndIMU();
