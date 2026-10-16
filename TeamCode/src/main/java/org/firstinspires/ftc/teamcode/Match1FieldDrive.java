@@ -118,6 +118,16 @@ public class Match1FieldDrive extends LinearOpMode {
     private double autoLeaveHeadingDegrees = 0.0; // 0 deg = Facing Forward away from driver
 
     private double targetHeading = autoLeaveHeadingDegrees * Math.PI / 180; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
+    private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
+
+    // Heading correction tuning. Base curve (used for holding, and as the floor when the stick
+    // is just past the deadzone) matches continuously into the active-steering curve, so
+    // releasing the stick only ever drops turn power, never steps it up.
+    private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
+    private static final double MAX_TURN_POWER = 0.4;  // base correction power ceiling, reached by ~16 deg error
+    private static final double HEADING_KP = 1.43;     // tuned so ~10 deg error yields ~0.25 power at base aggression
+    private static final double HEADING_TOLERANCE_DEGREES = 2.0; // stop correcting once within this residual error
+    private static final double MAX_TURN_AGGRESSION = 2.5; // pushing the stick to full deflection scales gain/ceiling up to this factor (reaches full motor power)
 
 
 
@@ -287,25 +297,45 @@ public class Match1FieldDrive extends LinearOpMode {
         double rightStickY = -gamepad1.right_stick_y; // +1 = UP
         double rightStickMag = Math.hypot(rightStickX, rightStickY);
 
-        if (rightStickMag > 0.2) { // Deadzone check
+        boolean rightStickActive = rightStickMag > 0.2; // Deadzone check
+        if (rightStickActive) {
             // Target angle: UP=0, LEFT=+PI/2, DOWN=PI, RIGHT=-PI/2
             targetHeading = Math.atan2(-rightStickX, rightStickY);  //atan2(y,x) is java, but stick is rotated 90 from field coordinates
+        } else if (rightStickWasActive) {
+            // Stick was just released - hold wherever we are right now instead of continuing
+            // to chase whatever heading the stick last pointed at
+            targetHeading = robotHeading;
         }
+        rightStickWasActive = rightStickActive;
 
         // Calculate heading error using up-to-date targetHeading
         double headingError = AngleUnit.normalizeRadians(targetHeading - robotHeading);
-        double yaw;
 
-        if (rightStickMag > 0.2) {
-            // Scale turning power limit by joystick magnitude
-            double kP = 1.5;
-            double rawYaw = headingError * kP;
-            yaw = Math.max(-rightStickMag, Math.min(rightStickMag, rawYaw));
+        // Pushing the stick further past the deadzone commands more aggressive turning: scale
+        // gain and power ceiling together from 1x (just past deadzone) up to MAX_TURN_AGGRESSION
+        // (full deflection). At the deadzone edge this equals the base (holding) curve exactly,
+        // so releasing the stick only ever drops turn power, never steps it up.
+        double aggression = 1.0;
+        if (rightStickActive) {
+            double t = (rightStickMag - 0.2) / 0.8; // 0 at deadzone edge, 1 at full deflection
+            aggression = 1.0 + t * (MAX_TURN_AGGRESSION - 1.0);
+        }
+        double effectiveKp = HEADING_KP * aggression;
+        double effectiveMaxTurnPower = MAX_TURN_POWER * aggression;
+
+        double yaw;
+        if (Math.abs(Math.toDegrees(headingError)) < HEADING_TOLERANCE_DEGREES) {
+            // Close enough - stop correcting so we don't dither around the target
+            yaw = 0;
         } else {
-            // Hold last target heading when stick is released
-            double kP = 1.0;
-            double rawYaw = headingError * kP;
-            yaw = Math.max(-0.3, Math.min(0.3, rawYaw));
+            double rawYaw = headingError * effectiveKp;
+            rawYaw = Math.max(-effectiveMaxTurnPower, Math.min(effectiveMaxTurnPower, rawYaw));
+            // Enforce the minimum power needed to overcome drivetrain friction, so small
+            // errors don't stall out before reaching the tolerance band
+            if (Math.abs(rawYaw) < MIN_TURN_POWER) {
+                rawYaw = Math.signum(headingError) * MIN_TURN_POWER;
+            }
+            yaw = rawYaw;
         }
 
         // Combine joystick requests for Mecanum wheel powers
