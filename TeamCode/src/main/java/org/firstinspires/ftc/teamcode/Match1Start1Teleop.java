@@ -30,7 +30,6 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -70,9 +69,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  * --------------------------------------------------------------------------------
  */
 
-@TeleOp(name="Match1FieldDrive", group="Linear OpMode")
+@TeleOp(name="Match1Start1Teleop", group="Linear OpMode")
 //@Disabled
-public class Match1FieldDrive extends LinearOpMode {
+public class Match1Start1Teleop extends LinearOpMode {
 
     // Declare OpMode members for hardware.
     private ElapsedTime runtime = new ElapsedTime();
@@ -110,12 +109,12 @@ public class Match1FieldDrive extends LinearOpMode {
 
     // Pinpoint Pod Offsets (in Inches)
     private double xPodOffsetInches = -3.600; // X pod offset + is left sideways from robot center (-84 mm)
-    private double yPodOffsetInches = -(17/2-2); // Y pod offset + is forward from robot center (-168 mm)
+    private double yPodOffsetInches = -(17.0/2.0-2.0); // Y pod offset + is forward from robot center (-168 mm)
 
     // Starting Match Pose
-    private double autoLeaveXInches = -0.00;
-    private double autoLeaveYInches = -0.00;
-    private double autoLeaveHeadingDegrees = 0.0; // 0 deg = Facing Forward away from driver
+    private double autoLeaveXInches = -71.0+8.0+9.0;
+    private double autoLeaveYInches =  24.0+18.0+9.0;
+    private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
     private double targetHeading = autoLeaveHeadingDegrees * Math.PI / 180; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
     private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
@@ -163,6 +162,12 @@ public class Match1FieldDrive extends LinearOpMode {
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+
 
         // Initialize goBILDA Pinpoint with pod offsets and starting pose (-72 in, -18 in, 0 deg)
         initPinpoint(xPodOffsetInches, yPodOffsetInches, autoLeaveXInches, autoLeaveYInches, autoLeaveHeadingDegrees);
