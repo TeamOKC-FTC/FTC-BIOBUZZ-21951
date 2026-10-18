@@ -106,20 +106,20 @@ public class Match1Start1Autonomous extends LinearOpMode {
     private static final double HEADING_TOLERANCE_DEGREES = 2.0; // stop correcting once within this residual error
 
     // Translation (X/Y position) control tuning for moveToWaypoint. Not validated on hardware yet.
-    private static final double POSITION_TOLERANCE_INCHES = 1.0; // TUNE ME
-    private static final double TRANSLATION_KP = 0.033;           // TUNE ME - power per inch of error
-    private static final double MIN_TRANSLATION_POWER = 0.12;    // TUNE ME - floor to overcome static friction
+    private static final double POSITION_TOLERANCE_INCHES = 1.5; // TUNE ME
+    private static final double TRANSLATION_KP = 0.027;           // TUNE ME - power per inch of error
+    private static final double MIN_TRANSLATION_POWER = 0.08;    // TUNE ME - floor to overcome static friction
     private static final double MAX_TRANSLATION_POWER = 0.6;     // TUNE ME - power ceiling
 
     // "Fully stopped" thresholds used when moveToWaypoint's requireFullStop argument is true.
-    private static final double STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC = 1.5;      // TUNE ME
+    private static final double STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC = 2.5;      // TUNE ME
     private static final double STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC = 8.0; // TUNE ME
     private static final double SETTLE_DWELL_MS = 150; // TUNE ME - must stay stopped this long before declaring done
 
     // RPM_OK tuning - how close to commanded RPM, and for how long, before launch is OK.
     private static final double RPM_TOLERANCE_PERCENT = 0.02; // TUNE ME - +/-3% of commanded RPM
     private static final double RPM_TOLERANCE_MIN_FLOOR = 20; // TUNE ME - absolute RPM floor so band isn't tiny near 0
-    private static final double RPM_OK_DWELL_MS = 250;        // TUNE ME
+    private static final double RPM_OK_DWELL_MS = 1000;        // TUNE ME
     private double rpmInBandSinceMs = -1; // -1 = not currently in band
 
     // moveToWaypoint non-blocking state: identifies the "active" commanded move so repeated
