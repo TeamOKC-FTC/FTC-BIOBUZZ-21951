@@ -103,18 +103,18 @@ public class Match1Autonomous extends LinearOpMode {
 
     // Translation (X/Y position) control tuning for moveToWaypoint. Not validated on hardware yet.
     private static final double POSITION_TOLERANCE_INCHES = 1.0; // TUNE ME
-    private static final double TRANSLATION_KP = 0.06;           // TUNE ME - power per inch of error
+    private static final double TRANSLATION_KP = 0.033;           // TUNE ME - power per inch of error
     private static final double MIN_TRANSLATION_POWER = 0.12;    // TUNE ME - floor to overcome static friction
     private static final double MAX_TRANSLATION_POWER = 0.6;     // TUNE ME - power ceiling
 
     // "Fully stopped" thresholds used when moveToWaypoint's requireFullStop argument is true.
     private static final double STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC = 1.5;      // TUNE ME
-    private static final double STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC = 5.0; // TUNE ME
+    private static final double STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC = 8.0; // TUNE ME
     private static final double SETTLE_DWELL_MS = 150; // TUNE ME - must stay stopped this long before declaring done
 
     // RPM_OK tuning - how close to commanded RPM, and for how long, before launch is OK.
-    private static final double RPM_TOLERANCE_PERCENT = 0.03; // TUNE ME - +/-3% of commanded RPM
-    private static final double RPM_TOLERANCE_MIN_FLOOR = 40; // TUNE ME - absolute RPM floor so band isn't tiny near 0
+    private static final double RPM_TOLERANCE_PERCENT = 0.02; // TUNE ME - +/-3% of commanded RPM
+    private static final double RPM_TOLERANCE_MIN_FLOOR = 20; // TUNE ME - absolute RPM floor so band isn't tiny near 0
     private static final double RPM_OK_DWELL_MS = 250;        // TUNE ME
     private double rpmInBandSinceMs = -1; // -1 = not currently in band
 
@@ -165,7 +165,14 @@ public class Match1Autonomous extends LinearOpMode {
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-
+        frontLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        backLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        frontRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        backRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+         frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         // Initialize goBILDA Pinpoint with pod offsets and starting pose
         initPinpoint(xPodOffsetInches, yPodOffsetInches, autoLeaveXInches, autoLeaveYInches, autoLeaveHeadingDegrees);
 
@@ -424,9 +431,10 @@ public class Match1Autonomous extends LinearOpMode {
             case 0:
                 // PLACEHOLDER for: drive to shooting position
                 // Future: if (moveToWaypoint(headingDeg, xIn, yIn, timeoutMs, true)) advanceStep();
-                if (elapsedInStep >= PLACEHOLDER_STEP_DELAY_MS) {
-                    advanceStep();
-                }
+
+                shooter.setVelocity(shooterSpeed);
+                advanceStep();
+
                 break;
 
             case 1:
@@ -435,6 +443,10 @@ public class Match1Autonomous extends LinearOpMode {
                 if (elapsedInStep >= PLACEHOLDER_STEP_DELAY_MS) {
                     advanceStep();
                 }
+                if (RPM_OK()) {
+                    advanceStep();
+                }
+
                 break;
 
             case 2:
