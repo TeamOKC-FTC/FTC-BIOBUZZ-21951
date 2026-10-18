@@ -93,8 +93,9 @@ public class Match1Start1Autonomous extends LinearOpMode {
     private double autoStartYInches =  -71.0+9.0;
     private double autoStartHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
-    private double autoLeaveXInches = -71.0+8.0+9.0;
+    private double autoLeaveXInches = -71.0+5.0+9.0;
     private double autoLeaveYInches =  24.0+18.0+9.0;
+
     private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
     // Heading correction tuning - copied verbatim from Match1FieldDrive's base (non-aggression)
@@ -105,11 +106,12 @@ public class Match1Start1Autonomous extends LinearOpMode {
     private static final double HEADING_KP = 1.43;     // tuned so ~10 deg error yields ~0.25 power
     private static final double HEADING_TOLERANCE_DEGREES = 2.0; // stop correcting once within this residual error
 
-    // Translation (X/Y position) control tuning for moveToWaypoint. Not validated on hardware yet.
-    private static final double POSITION_TOLERANCE_INCHES = 1.5; // TUNE ME
-    private static final double TRANSLATION_KP = 0.027;           // TUNE ME - power per inch of error
-    private static final double MIN_TRANSLATION_POWER = 0.08;    // TUNE ME - floor to overcome static friction
-    private static final double MAX_TRANSLATION_POWER = 0.6;     // TUNE ME - power ceiling
+    // Translation (X/Y position) control tuning for moveToWaypoint.
+    private static final double POSITION_TOLERANCE_INCHES = 1.5;    // TUNE ME - distance threshold to consider target reached
+    private static final double TRANSLATION_TOLERANCE_INCHES = 1.0; // TUNE ME - deadband to stop driving axis & allow braking
+    private static final double TRANSLATION_KP = 0.027;              // TUNE ME - power per inch of error
+    private static final double MIN_TRANSLATION_POWER = 0.08;       // TUNE ME - floor to overcome static friction
+    private static final double MAX_TRANSLATION_POWER = 0.6;        // TUNE ME - power ceiling
 
     // "Fully stopped" thresholds used when moveToWaypoint's requireFullStop argument is true.
     private static final double STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC = 2.5;      // TUNE ME
@@ -174,9 +176,9 @@ public class Match1Start1Autonomous extends LinearOpMode {
         frontRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         backRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-         frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         // Initialize goBILDA Pinpoint with pod offsets and starting pose
         initPinpoint(xPodOffsetInches, yPodOffsetInches, autoStartXInches, autoStartYInches, autoStartHeadingDegrees);
 
@@ -252,14 +254,15 @@ public class Match1Start1Autonomous extends LinearOpMode {
     }
 
     /**
-     * Proportional translation-correction curve (floor + ceiling), analogous to
-     * computeHeadingCorrectionPower but for one robot-frame position axis (axial or strafe).
+     * Proportional translation-correction curve (floor + ceiling) with deadband.
+     * Returns 0.0 power when error is within TRANSLATION_TOLERANCE_INCHES to allow the drivetrain
+     * to brake and settle without limit-cycle oscillation near the target position.
      * @param errorInches signed robot-frame position error for this axis, inches
      * @return signed motor power contribution for this axis
      */
     private double computeTranslationCorrectionPower(double errorInches) {
-        if (Math.abs(errorInches) < 0.01) {
-            return 0.0; // avoid floor-power chatter right at zero error
+        if (Math.abs(errorInches) < TRANSLATION_TOLERANCE_INCHES) {
+            return 0.0; // stop driving axis inside deadband to allow braking & prevent oscillation
         }
         double raw = errorInches * TRANSLATION_KP;
         raw = Math.max(-MAX_TRANSLATION_POWER, Math.min(MAX_TRANSLATION_POWER, raw));
@@ -364,9 +367,9 @@ public class Match1Start1Autonomous extends LinearOpMode {
         // Match1FieldDrive's driveFieldOriented), then drive it through P-control + mecanum combine.
         double robotAxial = errX * Math.cos(currentHeadingRad) + errY * Math.sin(currentHeadingRad);
         double robotStrafeLeft = -errX * Math.sin(currentHeadingRad) + errY * Math.cos(currentHeadingRad);
-
-        double axialPower = computeTranslationCorrectionPower(robotAxial);
-        double strafePower = computeTranslationCorrectionPower(robotStrafeLeft);
+        // When total 2D distance is within POSITION_TOLERANCE_INCHES, cut translation power to allow braking
+        double axialPower = positionOk ? 0.0 : computeTranslationCorrectionPower(robotAxial);
+        double strafePower = positionOk ? 0.0 : computeTranslationCorrectionPower(robotStrafeLeft);
         double yaw = computeHeadingCorrectionPower(headingErrorRad);
 
         double frontLeftPower = axialPower - strafePower - yaw;
@@ -451,16 +454,18 @@ public class Match1Start1Autonomous extends LinearOpMode {
 
             case 2:
                 // delay 6 seconds for shooting
-                if (elapsedInStep >= 6000.0) {
+                if (elapsedInStep >= 3000.0) {
                     gate.setPosition(1.0);  //close gate
                     shooter.setVelocity(0.0);
                     advanceStep();
                 }
+
+
                 break;
 
             case 3:
                 // drive to close to park
-                if(moveToWaypoint(autoStartHeadingDegrees, autoStartXInches, 24.0+18.0+9.0, 8000, true)){
+                if(moveToWaypoint(autoStartHeadingDegrees, autoStartXInches, autoLeaveYInches-21.0, 8000, true)){
                     advanceStep();
                 }
                 if (elapsedInStep >= 10000.0) {

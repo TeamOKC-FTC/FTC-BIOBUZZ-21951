@@ -112,8 +112,9 @@ public class Match1Start1Teleop extends LinearOpMode {
     private double yPodOffsetInches = -(17.0/2.0-2.0); // Y pod offset + is forward from robot center (-168 mm)
 
     // Starting Match Pose
-    private double autoLeaveXInches = -71.0+8.0+9.0;
+    private double autoLeaveXInches = -71.0+5.0+9.0;
     private double autoLeaveYInches =  24.0+18.0+9.0;
+
     private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
     private double targetHeading = autoLeaveHeadingDegrees * Math.PI / 180; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
