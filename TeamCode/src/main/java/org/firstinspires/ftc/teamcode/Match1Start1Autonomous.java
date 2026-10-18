@@ -61,8 +61,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * -----------------------------------------------------------------------------
  */
 
-@Autonomous(name="Match1Autonomous", group="Linear OpMode")
-public class Match1Autonomous extends LinearOpMode {
+@Autonomous(name="Match1Start1Autonomous", group="Linear OpMode", preselectTeleOp="Match1Start1Teleop")
+public class Match1Start1Autonomous extends LinearOpMode {
 
     // Declare OpMode members for hardware.
     private ElapsedTime runtime = new ElapsedTime();
@@ -85,13 +85,17 @@ public class Match1Autonomous extends LinearOpMode {
 
     // Pinpoint Pod Offsets (in Inches)
     private double xPodOffsetInches = -3.600; // X pod offset + is left sideways from robot center (-84 mm)
-    private double yPodOffsetInches = -(17/2-2); // Y pod offset + is forward from robot center (-168 mm)
+    private double yPodOffsetInches = -(17.0/2.0-2.0); // Y pod offset + is forward from robot center (-168 mm)
 
     // Starting Match Pose
     // TODO: set the real autonomous starting pose once the field starting position for this match is decided.
-    private double autoLeaveXInches = -0.00;
-    private double autoLeaveYInches = -0.00;
-    private double autoLeaveHeadingDegrees = 0.0; // 0 deg = Facing Forward away from driver
+    private double autoStartXInches = -9.5;
+    private double autoStartYInches =  -71.0+9.0;
+    private double autoStartHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
+
+    private double autoLeaveXInches = -71.0+8.0+9.0;
+    private double autoLeaveYInches =  24.0+18.0+9.0;
+    private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
     // Heading correction tuning - copied verbatim from Match1FieldDrive's base (non-aggression)
     // curve. Autonomous has no joystick, so the stick-deflection "aggression" scaling used in
@@ -102,20 +106,20 @@ public class Match1Autonomous extends LinearOpMode {
     private static final double HEADING_TOLERANCE_DEGREES = 2.0; // stop correcting once within this residual error
 
     // Translation (X/Y position) control tuning for moveToWaypoint. Not validated on hardware yet.
-    private static final double POSITION_TOLERANCE_INCHES = 1.0; // TUNE ME
-    private static final double TRANSLATION_KP = 0.06;           // TUNE ME - power per inch of error
-    private static final double MIN_TRANSLATION_POWER = 0.12;    // TUNE ME - floor to overcome static friction
+    private static final double POSITION_TOLERANCE_INCHES = 1.5; // TUNE ME
+    private static final double TRANSLATION_KP = 0.027;           // TUNE ME - power per inch of error
+    private static final double MIN_TRANSLATION_POWER = 0.08;    // TUNE ME - floor to overcome static friction
     private static final double MAX_TRANSLATION_POWER = 0.6;     // TUNE ME - power ceiling
 
     // "Fully stopped" thresholds used when moveToWaypoint's requireFullStop argument is true.
-    private static final double STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC = 1.5;      // TUNE ME
-    private static final double STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC = 5.0; // TUNE ME
+    private static final double STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC = 2.5;      // TUNE ME
+    private static final double STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC = 8.0; // TUNE ME
     private static final double SETTLE_DWELL_MS = 150; // TUNE ME - must stay stopped this long before declaring done
 
     // RPM_OK tuning - how close to commanded RPM, and for how long, before launch is OK.
-    private static final double RPM_TOLERANCE_PERCENT = 0.03; // TUNE ME - +/-3% of commanded RPM
-    private static final double RPM_TOLERANCE_MIN_FLOOR = 40; // TUNE ME - absolute RPM floor so band isn't tiny near 0
-    private static final double RPM_OK_DWELL_MS = 250;        // TUNE ME
+    private static final double RPM_TOLERANCE_PERCENT = 0.02; // TUNE ME - +/-3% of commanded RPM
+    private static final double RPM_TOLERANCE_MIN_FLOOR = 20; // TUNE ME - absolute RPM floor so band isn't tiny near 0
+    private static final double RPM_OK_DWELL_MS = 1000;        // TUNE ME
     private double rpmInBandSinceMs = -1; // -1 = not currently in band
 
     // moveToWaypoint non-blocking state: identifies the "active" commanded move so repeated
@@ -165,9 +169,16 @@ public class Match1Autonomous extends LinearOpMode {
         shooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-
+        frontLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        backLeftDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        frontRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        backRightDrive.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+         frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         // Initialize goBILDA Pinpoint with pod offsets and starting pose
-        initPinpoint(xPodOffsetInches, yPodOffsetInches, autoLeaveXInches, autoLeaveYInches, autoLeaveHeadingDegrees);
+        initPinpoint(xPodOffsetInches, yPodOffsetInches, autoStartXInches, autoStartYInches, autoStartHeadingDegrees);
 
         // Display repeating position telemetry during INIT phase until driver presses START
         while (!isStarted() && !isStopRequested()) {
@@ -188,7 +199,7 @@ public class Match1Autonomous extends LinearOpMode {
             updateTelemetry("Running");
         }
 
-        stopAllDriveMotors();
+        stopAllDriveMotors(true);
     }
 
     /**
@@ -211,11 +222,14 @@ public class Match1Autonomous extends LinearOpMode {
     /**
      * Sets all four drive motor powers to zero.
      */
-    private void stopAllDriveMotors() {
+    private void stopAllDriveMotors(boolean launcherAlsoStop) {
         frontLeftDrive.setPower(0);
         frontRightDrive.setPower(0);
         backLeftDrive.setPower(0);
         backRightDrive.setPower(0);
+        if (launcherAlsoStop) {
+            intake.setPower(0);
+        }
     }
 
     /**
@@ -341,7 +355,7 @@ public class Match1Autonomous extends LinearOpMode {
         }
 
         if (done) {
-            stopAllDriveMotors();
+            stopAllDriveMotors(false);
             moveActive = false;
             return true;
         }
@@ -422,40 +436,53 @@ public class Match1Autonomous extends LinearOpMode {
 
         switch (autoStep) {
             case 0:
-                // PLACEHOLDER for: drive to shooting position
-                // Future: if (moveToWaypoint(headingDeg, xIn, yIn, timeoutMs, true)) advanceStep();
-                if (elapsedInStep >= PLACEHOLDER_STEP_DELAY_MS) {
-                    advanceStep();
-                }
+                //start shooter at preset RPM
+                shooter.setVelocity(shooterSpeed);
+                advanceStep();
                 break;
 
             case 1:
-                // PLACEHOLDER for: spin up shooter and wait for RPM_OK()
-                // Future: shooter.setVelocity(shooterSpeed); if (RPM_OK()) advanceStep();
-                if (elapsedInStep >= PLACEHOLDER_STEP_DELAY_MS) {
+                // after 4 sec or rpm accuracy good then open gate
+                if (elapsedInStep >= 4000.0 || RPM_OK() ) {
+                    gate.setPosition(0.0);  //open gate
                     advanceStep();
                 }
                 break;
 
             case 2:
-                // PLACEHOLDER for: open gate, launch, close gate
-                // Future: toggle gate servo, dwell, close gate, advanceStep();
-                if (elapsedInStep >= PLACEHOLDER_STEP_DELAY_MS) {
+                // delay 6 seconds for shooting
+                if (elapsedInStep >= 6000.0) {
+                    gate.setPosition(1.0);  //close gate
+                    shooter.setVelocity(0.0);
                     advanceStep();
                 }
                 break;
 
             case 3:
-                // PLACEHOLDER for: drive to park
-                // Future: if (moveToWaypoint(headingDeg, xIn, yIn, timeoutMs, false)) advanceStep();
-                if (elapsedInStep >= PLACEHOLDER_STEP_DELAY_MS) {
+                // drive to close to park
+                if(moveToWaypoint(autoStartHeadingDegrees, autoStartXInches, 24.0+18.0+9.0, 8000, true)){
+                    advanceStep();
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
+                    advanceStep();
+                }
+                break;
+
+            case 4:
+                // drive to park
+                if(moveToWaypoint(autoLeaveHeadingDegrees, autoLeaveXInches, autoLeaveYInches, 8000, true)){
+                    advanceStep();
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
                     advanceStep();
                 }
                 break;
 
             default:
                 // Sequence complete - hold position.
-                stopAllDriveMotors();
+                stopAllDriveMotors(true);
                 break;
         }
     }
