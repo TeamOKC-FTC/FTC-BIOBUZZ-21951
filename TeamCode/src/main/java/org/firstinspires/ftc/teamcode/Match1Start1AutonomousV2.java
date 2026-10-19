@@ -56,7 +56,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * -----------------------------------------------------------------------------
  */
 
-@Autonomous(name="Match1Start1AutonomousV2", group="Linear OpMode", preselectTeleOp="Match1Start1Teleop")
+@Autonomous(name="Match1Start1AutonomousV2", group="Linear OpMode", preselectTeleOp="Match1Start1TeleopV2")
 public class Match1Start1AutonomousV2 extends LinearOpMode {
 
     // Declare OpMode members for hardware.
