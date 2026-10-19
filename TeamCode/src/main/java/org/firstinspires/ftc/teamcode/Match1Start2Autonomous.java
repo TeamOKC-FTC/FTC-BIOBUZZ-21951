@@ -51,13 +51,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * file does NOT modify Match1FieldDrive.java - everything needed is duplicated here
  * so the two OpModes stay fully independent.
  *
- * moveToWaypoint(...) and RPM_OK() below are real, usable building blocks. The
- * runAutonomousSequence() step machine, however, is CURRENTLY PLACEHOLDER ONLY:
- * each step is a non-blocking timed delay standing in for the real action named in
- * its comment (drive to shooting position, spin up shooter + wait for RPM_OK, open
- * gate and launch, drive to park). Real waypoint coordinates and the actual
- * moveToWaypoint()/RPM_OK()/servo calls still need to be hardcoded into each case
- * once the field positions for this match are decided.
+ * runAutonomousSequence() is a non-blocking step machine built from moveToWaypoint(...),
+ * RPM_OK(), and direct shooter/gate commands, with hardcoded waypoints for this start position.
  * -----------------------------------------------------------------------------
  */
 
@@ -118,7 +113,7 @@ public class Match1Start2Autonomous extends LinearOpMode {
     private static final double SETTLE_DWELL_MS = 150; // TUNE ME - must stay stopped this long before declaring done
 
     // RPM_OK tuning - how close to commanded RPM, and for how long, before launch is OK.
-    private static final double RPM_TOLERANCE_PERCENT = 0.02; // TUNE ME - +/-3% of commanded RPM
+    private static final double RPM_TOLERANCE_PERCENT = 0.02; // TUNE ME - +/-2% of commanded RPM
     private static final double RPM_TOLERANCE_MIN_FLOOR = 20; // TUNE ME - absolute RPM floor so band isn't tiny near 0
     private static final double RPM_OK_DWELL_MS = 1000;        // TUNE ME
     private double rpmInBandSinceMs = -1; // -1 = not currently in band
@@ -138,7 +133,6 @@ public class Match1Start2Autonomous extends LinearOpMode {
     // Autonomous sequencer state.
     private int autoStep = 0;
     private double stepStartTimeMs = -1; // -1 = not yet set for the current step
-    private static final double PLACEHOLDER_STEP_DELAY_MS = 1000; // placeholder duration, replace per step later
 
 
     @Override
@@ -221,14 +215,14 @@ public class Match1Start2Autonomous extends LinearOpMode {
     }
 
     /**
-     * Sets all four drive motor powers to zero.
+     * Sets all four drive motor powers to zero, and optionally the intake.
      */
-    private void stopAllDriveMotors(boolean launcherAlsoStop) {
+    private void stopAllDriveMotors(boolean intakeAlsoStop) {
         frontLeftDrive.setPower(0);
         frontRightDrive.setPower(0);
         backLeftDrive.setPower(0);
         backRightDrive.setPower(0);
-        if (launcherAlsoStop) {
+        if (intakeAlsoStop) {
             intake.setPower(0);
         }
     }
@@ -425,10 +419,7 @@ public class Match1Start2Autonomous extends LinearOpMode {
 
     /**
      * Non-blocking autonomous step machine. Call once per main loop iteration; advances autoStep
-     * internally once the current step's completion condition is met. Each case below is
-     * CURRENTLY A PLACEHOLDER (a timed delay) standing in for the real action named in its
-     * comment - swap in the real moveToWaypoint()/RPM_OK()/servo calls once field waypoints for
-     * this match are decided.
+     * internally once the current step's completion condition is met.
      */
     private void runAutonomousSequence() {
         double nowMs = runtime.milliseconds();

@@ -163,10 +163,10 @@ public class Match1Start2Teleop extends LinearOpMode {
         shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
-        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
 
         // Initialize goBILDA Pinpoint with pod offsets and starting pose (-72 in, -18 in, 0 deg)
@@ -270,9 +270,9 @@ public class Match1Start2Teleop extends LinearOpMode {
         telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
         telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
         if (shooteron) {
-            telemetry.addData("RPM command=", shooterSpeed * 60 / 28);
+            telemetry.addData("RPMcommand=", shooterSpeed * 60 / 28);
         } else {
-            telemetry.addData("RPM command=", 0);
+            telemetry.addData("RPMcommand=", 0);
         }
         double rawRpm = shooter.getVelocity() * 60 / 28;
         filteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - filteredShooterRpm);
@@ -303,7 +303,11 @@ public class Match1Start2Teleop extends LinearOpMode {
         double rightStickMag = Math.hypot(rightStickX, rightStickY);
 
         boolean rightStickActive = rightStickMag > 0.2; // Deadzone check
-        if (rightStickActive) {
+        if (gamepad1.b) {
+            // B depressed: override target heading so rearward ball launcher (-9in, -5in) aims at nearest hive
+            targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
+            rightStickActive = true;
+        } else if (rightStickActive) {
             // Target angle: UP=0, LEFT=+PI/2, DOWN=PI, RIGHT=-PI/2
             targetHeading = Math.atan2(-rightStickX, rightStickY);  //atan2(y,x) is java, but stick is rotated 90 from field coordinates
         } else if (rightStickWasActive) {
@@ -406,5 +410,40 @@ public class Match1Start2Teleop extends LinearOpMode {
             buttonLastState[buttonIndex] = false;
         }
         return false;
+    }
+
+    /**
+     * Calculates heading in radians so the rearward-facing ball launcher exit point (-9in X, -5in Y)
+     * aims directly at the center of the nearest hive opening.
+     */
+    private double calculateHeadingForLauncherAim(double robotX, double robotY, double robotHeading) {
+        // Transform launcher exit offset (-9.0 in X, -5.0 in Y) into field coordinates
+        double launcherX = robotX - 9.0 * Math.cos(robotHeading) + 5.0 * Math.sin(robotHeading);
+        double launcherY = robotY - 9.0 * Math.sin(robotHeading) - 5.0 * Math.cos(robotHeading);
+
+        // Distance to Hive 1 (-12.75, -16.84)
+        double hive1X = -12.75;
+        double hive1Y = -16.84;
+        double dx1 = launcherX - hive1X;
+        double dy1 = launcherY - hive1Y;
+        double dist1Sq = dx1 * dx1 + dy1 * dy1;
+
+        // Distance to Hive 2 (-12.75, +16.84)
+        double hive2X = -12.75;
+        double hive2Y = 16.84;
+        double dx2 = launcherX - hive2X;
+        double dy2 = launcherY - hive2Y;
+        double dist2Sq = dx2 * dx2 + dy2 * dy2;
+
+        // Pick whichever hive is closer to launcher
+        double bestHiveX = hive1X;
+        double bestHiveY = hive1Y;
+        if (dist2Sq < dist1Sq) {
+            bestHiveX = hive2X;
+            bestHiveY = hive2Y;
+        }
+
+        // Heading so rearward launcher (-X_robot) points at target:
+        return Math.atan2(launcherY - bestHiveY, launcherX - bestHiveX);
     }
 }
