@@ -189,6 +189,7 @@ public class Match1Start3Autonomous extends LinearOpMode {
         // Run the autonomous sequence until it completes or the match period ends
         while (opModeIsActive()) {
             pinpoint.update();
+            updateShooterRpmFilter();
 
             runAutonomousSequence();
 
@@ -200,7 +201,7 @@ public class Match1Start3Autonomous extends LinearOpMode {
 
     /**
      * Updates telemetry data for Pinpoint pose, shooter speed, and status. Does NOT update
-     * filteredShooterRpm - RPM_OK() owns that filter update so it is only applied once per tick.
+     * filteredShooterRpm - updateShooterRpmFilter() does that once per loop.
      * @param status Current status message
      */
     private void updateTelemetry(String status) {
@@ -391,16 +392,22 @@ public class Match1Start3Autonomous extends LinearOpMode {
     }
 
     /**
+     * Reads the shooter's actual RPM and updates the smoothed filteredShooterRpm. Called once
+     * every loop from runOpMode(), so the filtered value (and telemetry) is always current.
+     */
+    private void updateShooterRpmFilter() {
+        double rawRpm = shooter.getVelocity() * 60.0 / 28.0;
+        filteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - filteredShooterRpm);
+    }
+
+    /**
      * True once the shooter's filtered actual RPM has been within tolerance of the commanded RPM
-     * continuously for RPM_OK_DWELL_MS - i.e. it is safe to launch. This is the only place in this
-     * file that updates filteredShooterRpm, so call it every loop iteration while the shooter is
-     * spinning up or running (e.g. from the sequencer step that is waiting to launch).
+     * continuously for RPM_OK_DWELL_MS - i.e. it is safe to launch. Call it every loop while
+     * waiting to launch so the dwell timer stays accurate. filteredShooterRpm is updated
+     * separately by updateShooterRpmFilter().
      * @return true if the shooter has stabilized at the commanded RPM
      */
     private boolean RPM_OK() {
-        double rawRpm = shooter.getVelocity() * 60.0 / 28.0;
-        filteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - filteredShooterRpm);
-
         double commandedRpm = shooterSpeed * 60.0 / 28.0;
         double tolerance = Math.max(commandedRpm * RPM_TOLERANCE_PERCENT, RPM_TOLERANCE_MIN_FLOOR);
         boolean inBand = Math.abs(filteredShooterRpm - commandedRpm) < tolerance;
@@ -438,7 +445,7 @@ public class Match1Start3Autonomous extends LinearOpMode {
             case 1:
                 // wait 18 sec, then open gate once rpm accuracy good (or 2 sec later regardless,
                 // so a shooter that never settles in band can't block parking). RPM_OK() is called
-                // every loop so its filter and dwell timer are already settled by the 18 sec mark.
+                // every loop so its dwell timer is already settled by the 18 sec mark.
                 boolean rpmOk = RPM_OK();
                 if (elapsedInStep >= 18000.0 && (rpmOk || elapsedInStep >= 20000.0)) {
                     gate.setPosition(0.0);  //open gate
