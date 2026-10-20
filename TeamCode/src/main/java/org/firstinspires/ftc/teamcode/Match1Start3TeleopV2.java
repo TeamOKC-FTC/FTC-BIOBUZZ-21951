@@ -270,7 +270,6 @@ public class Match1Start3TeleopV2 extends LinearOpMode {
         telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
-        telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
         if (shooteron) {
             telemetry.addData("RPMcommand=", shooterSpeed * 60 / 28);
         } else {
