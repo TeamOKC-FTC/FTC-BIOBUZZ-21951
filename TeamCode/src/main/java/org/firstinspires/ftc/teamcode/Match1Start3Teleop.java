@@ -88,7 +88,7 @@ public class Match1Start3Teleop extends LinearOpMode {
     // goBILDA Pinpoint Odometry Computer
     private GoBildaPinpointDriver pinpoint = null;
 
-    private int shooterSpeed = 2500 * 28 / 60; // RPM converted to ticks/sec
+    private int shooterSpeed = 2525 * 28 / 60; // RPM converted to ticks/sec
     private boolean shooteron = false;
     private double filteredShooterRpm = 0;
     private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
@@ -413,13 +413,13 @@ public class Match1Start3Teleop extends LinearOpMode {
     }
 
     /**
-     * Calculates heading in radians so the rearward-facing ball launcher exit point (-9in X, -5in Y)
+     * Calculates heading in radians so the rearward-facing ball launcher exit point (-9in X, -3in Y)
      * aims directly at the center of the nearest hive opening.
      */
     private double calculateHeadingForLauncherAim(double robotX, double robotY, double robotHeading) {
-        // Transform launcher exit offset (-9.0 in X, -5.0 in Y) into field coordinates
-        double launcherX = robotX - 9.0 * Math.cos(robotHeading) + 5.0 * Math.sin(robotHeading);
-        double launcherY = robotY - 9.0 * Math.sin(robotHeading) - 5.0 * Math.cos(robotHeading);
+        // Transform launcher exit offset (-9.0 in X, -3.0 in Y) into field coordinates
+        double launcherX = robotX - 9.0 * Math.cos(robotHeading) + 3.0 * Math.sin(robotHeading);
+        double launcherY = robotY - 9.0 * Math.sin(robotHeading) - 3.0 * Math.cos(robotHeading);
 
         // Distance to Hive 1 (-12.75, -16.84)
         double hive1X = -12.75;

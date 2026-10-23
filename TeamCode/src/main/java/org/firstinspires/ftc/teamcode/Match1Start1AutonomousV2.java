@@ -129,7 +129,7 @@ public class Match1Start1AutonomousV2 extends LinearOpMode {
     private static final double SETTLE_DWELL_MS = 150; // TUNE ME - must stay stopped this long before declaring done
 
     // RPM_OK tuning - how close to commanded RPM, and for how long, before launch is OK.
-    private static final double RPM_TOLERANCE_PERCENT = 0.02; // TUNE ME - +/-2% of commanded RPM
+    private static final double RPM_TOLERANCE_PERCENT = 0.015; // TUNE ME - +/-1.5% of commanded RPM
     private static final double RPM_TOLERANCE_MIN_FLOOR = 20; // TUNE ME - absolute RPM floor so band isn't tiny near 0
     private static final double RPM_OK_DWELL_MS = 1000;        // TUNE ME
     private double rpmInBandSinceMs = -1; // -1 = not currently in band
