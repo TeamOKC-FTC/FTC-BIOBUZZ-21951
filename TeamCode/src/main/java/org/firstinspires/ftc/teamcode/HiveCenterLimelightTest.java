@@ -18,15 +18,23 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
  *    - Roll / Pitch / Yaw: Rotation of camera lens relative to launcher exit orientation.
  *    -> Result: Limelight treats the Ball Launcher Exit Point as the 3D origin (0,0,0).
  *
- * 2. TAG-CLUSTER-TO-HIVE OFFSET ("AprilTags / Field Map" tab in Limelight Web UI):
- *    - Origin (0,0,0): Geometric center of the 4-Tag AprilTag Cluster.
- *    - +X Axis: Forward distance from Tag Cluster center to Hive Opening center.
- *    - +Y Axis: Left distance from Tag Cluster center to Hive Opening center.
- *    - +Z Axis: Vertical distance from Tag Cluster center to Hive Opening center.
+ * 2. APRILTAG LAYOUT RELATIVE TO HIVE OPENING CENTER ("AprilTags" tab in Limelight Web UI):
+ *    - Origin (0,0,0): The Hive Opening Center itself!
+ *    - Each tag's 3D offset (X, Y, Z) is entered directly relative to the Hive Opening Center:
+ *      * Tag L1 (IDs 30, 34, 38, 42): X = -6.50", Y = +7.1874", Z = -5.622"
+ *      * Tag L2 (IDs 31, 35, 39, 43): X = -2.75", Y = +7.1874", Z = -5.622"
+ *      * Tag R1 (IDs 32, 36, 40, 44): X = +2.75", Y = +7.1874", Z = -5.622"
+ *      * Tag R2 (IDs 33, 37, 41, 45): X = +6.50", Y = +7.1874", Z = -5.622"
  *    -> Result: getBotpose() returns the 3D target pose directly from Launcher Exit
  *               to Hive Opening Center!
  *
- * 3. YAW STEERING DIRECTION CONVENTION:
+ * 3. HIVE CLUSTER IDs (Tag size = 3.25"):
+ *    - RED SCORING Cluster:   IDs 30 - 33
+ *    - RED AUDIENCE Cluster:  IDs 34 - 37
+ *    - BLUE AUDIENCE Cluster: IDs 38 - 41
+ *    - BLUE SCORING Cluster:  IDs 42 - 45
+ *
+ * 4. YAW STEERING DIRECTION CONVENTION:
  *    - POSITIVE (+yaw): Target is offset to the LEFT.
  *      -> Turn robot CCW (Counter-Clockwise) to align with target.
  *    - NEGATIVE (-yaw): Target is offset to the RIGHT.
