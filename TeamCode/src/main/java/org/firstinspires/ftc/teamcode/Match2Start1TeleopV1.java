@@ -194,8 +194,9 @@ public class Match2Start1TeleopV1 extends LinearOpMode {
                 intake.setPower(gamepad1.right_trigger);
             } else {
                 intake.setPower(-gamepad1.left_trigger);
-            }//If intake then on gate off.
-            if (Math.abs(intake.getPower())>0){
+            }
+            //If intake then on gate off.
+            if (Math.abs(intake.getPower())>0.2){
                 gate.setPosition(1.0);
             }
 

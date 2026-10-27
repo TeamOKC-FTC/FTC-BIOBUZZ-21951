@@ -195,6 +195,11 @@ public class Match1Start1Teleop extends LinearOpMode {
                 intake.setPower(-gamepad1.left_trigger);
             }
 
+            //If intake then on gate off.
+            if (Math.abs(intake.getPower())>0){
+                gate.setPosition(1.0);
+            }
+
             // Shooter speed adjustments
             if (isPressed(gamepad1.dpad_up, BTN_DPAD_UP)) {
                 shooterSpeed = shooterSpeed + 25 * 28 / 60;
