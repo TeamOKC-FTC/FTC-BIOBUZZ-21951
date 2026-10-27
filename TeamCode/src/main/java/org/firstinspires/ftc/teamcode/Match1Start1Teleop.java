@@ -196,7 +196,7 @@ public class Match1Start1Teleop extends LinearOpMode {
             }
 
             //If intake then on gate off.
-            if (Math.abs(intake.getPower())>0){
+            if (Math.abs(intake.getPower()) > 0.2) {
                 gate.setPosition(1.0);
             }
 

@@ -69,7 +69,7 @@ public class Match2Start2Autonomous extends LinearOpMode {
     // goBILDA Pinpoint Odometry Computer
     private GoBildaPinpointDriver pinpoint = null;
 
-    private int shooterSpeed = 2500 * 28 / 60; // RPM converted to ticks/sec
+    private int shooterSpeed = 2475 * 28 / 60; // RPM converted to ticks/sec
     private double filteredShooterRpm = 0;
     private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
 

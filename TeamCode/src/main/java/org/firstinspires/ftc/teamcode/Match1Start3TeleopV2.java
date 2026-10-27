@@ -71,7 +71,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 @TeleOp(name="Match1Start3TeleopV2", group="Linear OpMode")
 //@Disabled
-public class Match2Start3TeleopV1 extends LinearOpMode {
+public class Match1Start3TeleopV2 extends LinearOpMode {
 
     // Declare OpMode members for hardware.
     private ElapsedTime runtime = new ElapsedTime();
@@ -196,9 +196,9 @@ public class Match2Start3TeleopV1 extends LinearOpMode {
                 intake.setPower(-gamepad1.left_trigger);
             }
 
-            //If intake then on gate off.
+            //If intake on then gate blocked.
             if (Math.abs(intake.getPower())>0.2){
-                gate.setPosition(1.0);
+                gate.setPosition(1.0);   //blocked
             }
 
             // Shooter speed adjustments
