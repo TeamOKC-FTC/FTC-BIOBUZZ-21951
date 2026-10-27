@@ -21,7 +21,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
  * 2. APRILTAG LAYOUT RELATIVE TO HIVE OPENING CENTER ("AprilTags" tab in Limelight Web UI):
  *    - Origin (0,0,0): The Hive Opening Center itself!
  *    - Each tag's 3D offset (X, Y, Z) is entered directly relative to the Hive Opening Center:
- *      * Tag L1 (IDs 30, 34, 38, 42): X = -6.50", Y = +7.1874", Z = -5.622"
+ *      * Tag L1 (IDs 30, 34, 38, 42): X = -6.50"(-165.1mm), Y = +7.1874"(182mm), Z = -5.622"(-142.8mm)
  *      * Tag L2 (IDs 31, 35, 39, 43): X = -2.75", Y = +7.1874", Z = -5.622"
  *      * Tag R1 (IDs 32, 36, 40, 44): X = +2.75", Y = +7.1874", Z = -5.622"
  *      * Tag R2 (IDs 33, 37, 41, 45): X = +6.50", Y = +7.1874", Z = -5.622"

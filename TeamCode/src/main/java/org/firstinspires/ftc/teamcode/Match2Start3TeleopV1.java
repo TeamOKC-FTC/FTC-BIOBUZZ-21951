@@ -69,9 +69,9 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  * --------------------------------------------------------------------------------
  */
 
-@TeleOp(name="Match1Start2TeleopV2", group="Linear OpMode")
+@TeleOp(name="Match1Start3TeleopV2", group="Linear OpMode")
 //@Disabled
-public class Match1Start2TeleopV2 extends LinearOpMode {
+public class Match2Start3TeleopV1 extends LinearOpMode {
 
     // Declare OpMode members for hardware.
     private ElapsedTime runtime = new ElapsedTime();
@@ -112,9 +112,10 @@ public class Match1Start2TeleopV2 extends LinearOpMode {
     private double yPodOffsetInches = -(17.0/2.0-2.0); // Y pod offset + is forward from robot center (-168 mm)
 
     // Starting Match Pose
-    private double autoLeaveXInches = -71.0 +5.0 +9.0;
-    private double autoLeaveYInches =  24.0 +4.0 -9.0;
-    private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
+    private double autoLeaveXInches = -71.0+7.0+9.0;
+    private double autoLeaveYInches =  44.0+9.0;
+
+    private double autoLeaveHeadingDegrees = 90.0; // 0 deg = Facing Forward away from driver
 
     private double targetHeading = autoLeaveHeadingDegrees * Math.PI / 180; // Initial target heading: 0 rad (0 deg = Facing Forward away from driver)
     private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
@@ -193,6 +194,9 @@ public class Match1Start2TeleopV2 extends LinearOpMode {
                 intake.setPower(gamepad1.right_trigger);
             } else {
                 intake.setPower(-gamepad1.left_trigger);
+            }//If intake then on gate off.
+            if (Math.abs(intake.getPower())>0){
+                gate.setPosition(1.0);
             }
 
             // Shooter speed adjustments
