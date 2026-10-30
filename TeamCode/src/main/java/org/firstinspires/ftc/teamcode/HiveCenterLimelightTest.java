@@ -90,12 +90,25 @@ public class HiveCenterLimelightTest extends LinearOpMode {
                     //   - NEGATIVE (-yaw): Target is offset to the RIGHT -> Robot must turn CW (Clockwise) to align
                     double yawDegrees = targetPose.getOrientation().getYaw(AngleUnit.DEGREES);
 
+                    // Alternate aim method for comparison: treat yaw as the launcher's facing in the
+                    // hive frame, and get the direction to the hive from the X/Y position instead.
+                    //   bearing = direction from launcher exit to hive center (origin) in hive frame
+                    //   turn    = how far to rotate so the launcher faces the hive (+ = CCW / left)
+                    // If the robot is aimed at the hive and turn reads ~180 deg, the hive-frame axes
+                    // are flipped and 180 should be added.
+                    double bearingDegrees = Math.toDegrees(Math.atan2(-y, -x));
+                    double turnDegrees = AngleUnit.normalizeDegrees(bearingDegrees - yawDegrees);
+
                     telemetry.addData("--- Launcher Metrics ---", "");
                     telemetry.addData("Horizontal Distance", "%.2f meters (%.1f inches)", horizontalDistanceMeters, horizontalDistanceMeters * 39.3701);
                     telemetry.addData("Forward (X)", "%.2f m", x);
                     telemetry.addData("Lateral (Y)", "%.2f m", y);
                     telemetry.addData("Vertical (Z)", "%.2f m", z);
                     telemetry.addData("Target Yaw", "%.2f deg", yawDegrees);
+                    telemetry.addData("--- Aim Comparison (turn to aim, + = CCW) ---", "");
+                    telemetry.addData("Method A: yaw", "%.2f deg", yawDegrees);
+                    telemetry.addData("Method B: X/Y bearing - yaw", "%.2f deg", turnDegrees);
+                    telemetry.addData("Bearing to Hive (B)", "%.2f deg", bearingDegrees);
                 } else {
                     telemetry.addData("3D Pose", "Not Solved Yet");
                 }

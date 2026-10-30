@@ -502,5 +502,13 @@ public class Match2LimeLightTeleop extends LinearOpMode {
 
         double yawDegrees = targetPose.getOrientation().getYaw(AngleUnit.DEGREES);
         return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(yawDegrees));
+
+        // METHOD B (see "Method B" in HiveCenterLimelightTest): to switch, comment out the
+        // return line above and uncomment the lines below. Treats yaw as the launcher's facing
+        // in the hive frame and gets the direction to the hive from X/Y instead.
+        // If the robot aims ~180 deg off, change turnDegrees to (bearingDegrees - yawDegrees + 180.0).
+        //double bearingDegrees = Math.toDegrees(Math.atan2(-targetPose.getPosition().y, -targetPose.getPosition().x));
+        //double turnDegrees = AngleUnit.normalizeDegrees(bearingDegrees - yawDegrees);
+        //return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(turnDegrees));
     }
 }
