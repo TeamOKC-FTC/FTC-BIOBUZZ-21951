@@ -101,6 +101,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
     private double targetHeading = 0.0;
     private double targetDistanceInches = 0.0; // Global target distance to hive opening (in inches)
     private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
+    private boolean bWasPressed = false; // tracks B state last loop, so aim target is only computed on the initial press
 
     // Heading correction tuning.
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
@@ -114,15 +115,15 @@ public class Match2LimeLightTeleop extends LinearOpMode {
     public void runOpMode() {
 
         // Initialize the hardware variables.
-        frontRightDrive = hardwareMap.get(DcMotor.class, "rightFront");
-        frontLeftDrive = hardwareMap.get(DcMotor.class, "leftFront");
-        backRightDrive = hardwareMap.get(DcMotor.class, "rightRear");
-        backLeftDrive = hardwareMap.get(DcMotor.class, "leftRear");
-        intake = hardwareMap.get(DcMotor.class, "intake");
-        shooter = hardwareMap.get(DcMotorEx.class, "shooter");
-        rightFlipper = hardwareMap.get(Servo.class, "rightFlipper");
-        leftFlipper = hardwareMap.get(Servo.class, "leftFlipper");
-        gate = hardwareMap.get(Servo.class, "gate");
+        frontRightDrive = hardwareMap.get(DcMotor.class, "rightFront"); //port 0
+        frontLeftDrive = hardwareMap.get(DcMotor.class, "leftFront"); //port 1
+        backRightDrive = hardwareMap.get(DcMotor.class, "rightRear"); //port 2
+        backLeftDrive = hardwareMap.get(DcMotor.class, "leftRear");  //port 3
+        intake = hardwareMap.get(DcMotor.class, "intake");   //exp hub port 0
+        shooter = hardwareMap.get(DcMotorEx.class, "shooter");  //exp hub port 1
+        rightFlipper = hardwareMap.get(Servo.class, "rightFlipper");  //exp hub port 0
+        leftFlipper = hardwareMap.get(Servo.class, "leftFlipper");  //exp hub port 1
+        gate = hardwareMap.get(Servo.class, "gate");  //exp hub port 2
 
         frontLeftDrive.setDirection(DcMotor.Direction.REVERSE);
         backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
@@ -195,6 +196,11 @@ public class Match2LimeLightTeleop extends LinearOpMode {
                 intake.setPower(gamepad1.right_trigger);
             } else {
                 intake.setPower(-gamepad1.left_trigger);
+            }
+
+            //If intake then on gate off.
+            if (Math.abs(intake.getPower())>.2){
+                gate.setPosition(1.0);
             }
 
             // Shooter speed adjustments
@@ -320,14 +326,18 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         boolean rightStickActive = rightStickMag > 0.2; // Deadzone check
 
         if (gamepad1.b) {
-            // Attempt Limelight 3D auto-aim first (requires at least 3 fiducials found)
-            double limelightHeading = calculateHeadingFromLimelight(robotHeading);
+            // Only compute the aim target on the initial press. Limelight data is unreliable while
+            // the robot is turning, so the target is latched and held (via Pinpoint heading) until B is released.
+            if (!bWasPressed) {
+                // Attempt Limelight 3D auto-aim first (requires at least 3 fiducials found)
+                double limelightHeading = calculateHeadingFromLimelight(robotHeading);
 
-            if (!Double.isNaN(limelightHeading)) {
-                targetHeading = limelightHeading;
-            } else {
-                // Fallback to Pinpoint odometry calculation if Limelight target is unavailable or < 3 tags
-                targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
+                if (!Double.isNaN(limelightHeading)) {
+                    targetHeading = limelightHeading;
+                } else {
+                    // Fallback to Pinpoint odometry calculation if Limelight target is unavailable or < 3 tags
+                    targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
+                }
             }
 
             rightStickActive = true;
@@ -340,6 +350,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
             targetHeading = robotHeading;
         }
         rightStickWasActive = rightStickActive;
+        bWasPressed = gamepad1.b;
 
         // Calculate heading error using up-to-date targetHeading
         double headingError = AngleUnit.normalizeRadians(targetHeading - robotHeading);
@@ -399,7 +410,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
      * @param startHeadingDegrees Initial heading in degrees
      */
     private void initPinpoint(double xPodOffsetInches, double yPodOffsetInches, double startXInches, double startYInches, double startHeadingDegrees) {
-        pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");
+        pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");  //control hub ic2 port 1
 
         // Set odometry pod offsets in INCHES relative to center of robot
         pinpoint.setOffsets( 25.4*xPodOffsetInches, 25.4*yPodOffsetInches, DistanceUnit.MM);
@@ -501,14 +512,14 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         targetDistanceInches = distMeters * 39.3701;
 
         double yawDegrees = targetPose.getOrientation().getYaw(AngleUnit.DEGREES);
-        return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(yawDegrees));
+        //return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(yawDegrees));
 
         // METHOD B (see "Method B" in HiveCenterLimelightTest): to switch, comment out the
         // return line above and uncomment the lines below. Treats yaw as the launcher's facing
         // in the hive frame and gets the direction to the hive from X/Y instead.
         // If the robot aims ~180 deg off, change turnDegrees to (bearingDegrees - yawDegrees + 180.0).
-        //double bearingDegrees = Math.toDegrees(Math.atan2(-targetPose.getPosition().y, -targetPose.getPosition().x));
-        //double turnDegrees = AngleUnit.normalizeDegrees(bearingDegrees - yawDegrees);
-        //return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(turnDegrees));
+        double bearingDegrees = Math.toDegrees(Math.atan2(-targetPose.getPosition().y, -targetPose.getPosition().x));
+        double turnDegrees = AngleUnit.normalizeDegrees(bearingDegrees - yawDegrees);
+        return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(turnDegrees));
     }
 }

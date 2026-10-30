@@ -100,10 +100,10 @@ public class HiveCenterLimelightTest extends LinearOpMode {
                     double turnDegrees = AngleUnit.normalizeDegrees(bearingDegrees - yawDegrees);
 
                     telemetry.addData("--- Launcher Metrics ---", "");
-                    telemetry.addData("Horizontal Distance", "%.2f meters (%.1f inches)", horizontalDistanceMeters, horizontalDistanceMeters * 39.3701);
-                    telemetry.addData("Forward (X)", "%.2f m", x);
-                    telemetry.addData("Lateral (Y)", "%.2f m", y);
-                    telemetry.addData("Vertical (Z)", "%.2f m", z);
+                    telemetry.addData("Horizontal Distance", "%.1f in", horizontalDistanceMeters * 39.3701);
+                    telemetry.addData("Forward (X)", "%.1f in", x * 39.3701);
+                    telemetry.addData("Lateral (Y)", "%.1f in", y * 39.3701);
+                    telemetry.addData("Vertical (Z)", "%.1f in", z * 39.3701);
                     telemetry.addData("Target Yaw", "%.2f deg", yawDegrees);
                     telemetry.addData("--- Aim Comparison (turn to aim, + = CCW) ---", "");
                     telemetry.addData("Method A: yaw", "%.2f deg", yawDegrees);
