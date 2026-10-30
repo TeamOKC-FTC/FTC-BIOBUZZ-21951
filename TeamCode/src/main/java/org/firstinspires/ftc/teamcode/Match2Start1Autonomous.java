@@ -30,6 +30,9 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -51,7 +54,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * -----------------------------------------------------------------------------
  */
 
-@Autonomous(name="Match2Start1Autonomous", group="Linear OpMode", preselectTeleOp="Match2Teleop")
+@Autonomous(name="Match2Start1Autonomous", group="Linear OpMode", preselectTeleOp="Match2LimeLightTeleop")
 public class Match2Start1Autonomous extends LinearOpMode {
 
     // Declare OpMode members for hardware.
@@ -68,6 +71,10 @@ public class Match2Start1Autonomous extends LinearOpMode {
 
     // goBILDA Pinpoint Odometry Computer
     private GoBildaPinpointDriver pinpoint = null;
+
+    // Limelight 3A, used during INIT to detect alliance color
+    private Limelight3A limelight = null;
+    private String allianceColor = "NONE"; // "RED", "BLUE", or "NONE"
 
     private int shooterSpeed = 2475 * 28 / 60; // RPM converted to ticks/sec
     private double filteredShooterRpm = 0;
@@ -178,15 +185,34 @@ public class Match2Start1Autonomous extends LinearOpMode {
         // Initialize goBILDA Pinpoint with pod offsets and starting pose
         initPinpoint(xPodOffsetInches, yPodOffsetInches, autoStartXInches, autoStartYInches, autoStartHeadingDegrees);
 
+        // Initialize Limelight 3A (Pipeline 0 sees all tags, used to detect alliance color)
+        try {
+            limelight = hardwareMap.get(Limelight3A.class, "limelight");
+            limelight.pipelineSwitch(0);
+            limelight.start();
+        } catch (Exception e) {
+            telemetry.addData("Limelight Warning", "Limelight hardware not found: " + e.getMessage());
+        }
+
         // Display repeating position telemetry during INIT phase until driver presses START
         while (!isStarted() && !isStopRequested()) {
             pinpoint.update();
+
+            // Keep the last alliance color seen, so a missed frame doesn't reset it
+            String seenAlliance = detectAllianceColor();
+            if (!seenAlliance.equals("NONE")) {
+                allianceColor = seenAlliance;
+            }
+
             updateTelemetry("Initialized - Waiting for Start");
             sleep(20);
         }
 
         waitForStart();
         runtime.reset();
+
+        // Alliance color is now final - switch Limelight to only see our alliance's tags
+        selectAlliancePipeline();
 
         // Run the autonomous sequence until it completes or the match period ends
         while (opModeIsActive()) {
@@ -214,11 +240,64 @@ public class Match2Start1Autonomous extends LinearOpMode {
             PoseStorage.currentPose = pinpoint.getPosition();
             PoseStorage.hasValidPose = true;
         }
+        PoseStorage.allianceColor = allianceColor;
+    }
+
+    /**
+     * Looks at all AprilTags the Limelight sees and picks the one closest to the center of the
+     * camera view. Red tags are IDs 30-37, blue tags are IDs 38-45.
+     * Needs Pipeline 0 (all tags) to be active.
+     * @return "RED", "BLUE", or "NONE" if no hive tag is seen
+     */
+    private String detectAllianceColor() {
+        if (limelight == null) {
+            return "NONE";
+        }
+
+        LLResult llResult = limelight.getLatestResult();
+        if (llResult == null || !llResult.isValid()) {
+            return "NONE";
+        }
+
+        int closestTagId = -1;
+        double closestOffsetDegrees = Double.MAX_VALUE;
+        for (LLResultTypes.FiducialResult fiducial : llResult.getFiducialResults()) {
+            // Angle between the tag and the center of the camera view
+            double offsetDegrees = Math.hypot(fiducial.getTargetXDegrees(), fiducial.getTargetYDegrees());
+            if (offsetDegrees < closestOffsetDegrees) {
+                closestOffsetDegrees = offsetDegrees;
+                closestTagId = fiducial.getFiducialId();
+            }
+        }
+
+        if (closestTagId >= 30 && closestTagId <= 37) {
+            return "RED";
+        } else if (closestTagId >= 38 && closestTagId <= 45) {
+            return "BLUE";
+        }
+        return "NONE";
+    }
+
+    /**
+     * Switches the Limelight to the pipeline that only sees our alliance's tags.
+     * Pipeline 1 = red tags only, Pipeline 2 = blue tags only.
+     * If the alliance is NONE, stays on Pipeline 0 (all tags).
+     */
+    private void selectAlliancePipeline() {
+        if (limelight == null) {
+            return;
+        }
+        if (allianceColor.equals("RED")) {
+            limelight.pipelineSwitch(1);
+        } else if (allianceColor.equals("BLUE")) {
+            limelight.pipelineSwitch(2);
+        }
     }
 
     private void updateTelemetry(String status) {
         Pose2D pose = pinpoint.getPosition();
         telemetry.addData("Status", status);
+        telemetry.addData("Alliance", allianceColor);
         telemetry.addData("X (in)", pose.getX(DistanceUnit.INCH));
         telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));

@@ -10,4 +10,5 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 public class PoseStorage {
     public static Pose2D currentPose = new Pose2D(DistanceUnit.INCH, -9.5, -62.0, AngleUnit.DEGREES, -90.0);
     public static boolean hasValidPose = false;
+    public static String allianceColor = "NONE"; // "RED", "BLUE", or "NONE" (no good camera data during Autonomous INIT)
 }

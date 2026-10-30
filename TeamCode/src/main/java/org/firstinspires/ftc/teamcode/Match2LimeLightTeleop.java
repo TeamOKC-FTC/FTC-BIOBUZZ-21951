@@ -31,6 +31,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -43,6 +44,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit;
 
 /*
  * Match2LimeLightTeleop
@@ -74,6 +76,8 @@ public class Match2LimeLightTeleop extends LinearOpMode {
     // goBILDA Pinpoint Odometry Computer & Limelight 3A
     private GoBildaPinpointDriver pinpoint = null;
     private Limelight3A limelight = null;
+    private String allianceColor = "NONE"; // "RED", "BLUE", or "NONE"
+    private boolean allianceFromAuto = false; // true if the alliance color was loaded from Autonomous (even if "NONE")
 
     private int shooterSpeed = 2475 * 28 / 60; // RPM converted to ticks/sec
     private boolean shooteron = false;
@@ -101,8 +105,8 @@ public class Match2LimeLightTeleop extends LinearOpMode {
     private double targetHeading = 0.0;
     private double targetDistanceInches = 0.0; // Global target distance to hive opening (in inches)
     private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
-    private boolean bWasPressed = false; // tracks B state last loop, so aim target is only computed on the initial press
-
+    private boolean limelightAimLocked = false; // true once a steady Limelight aim was taken during the current B press
+    private static final double LIMELIGHT_MAX_TURN_RATE_DEG_PER_SEC = 20.0; // only trust Limelight when turning slower than this (motion blur)
     // Heading correction tuning.
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
     private static final double MAX_TURN_POWER = 0.4;  // base correction power ceiling, reached by ~16 deg error
@@ -146,7 +150,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize Limelight 3A (Pipeline 0)
+        // Initialize Limelight 3A (Pipeline 0 sees all tags, used to detect alliance color)
         try {
             limelight = hardwareMap.get(Limelight3A.class, "limelight");
             limelight.pipelineSwitch(0);
@@ -160,6 +164,10 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         String initStatus;
         if (PoseStorage.hasValidPose) {
             startPose = PoseStorage.currentPose;
+            // Use Autonomous' alliance color. If it is "NONE" the camera will not be used.
+            allianceColor = PoseStorage.allianceColor;
+            allianceFromAuto = true;
+            selectAlliancePipeline();
             PoseStorage.hasValidPose = false; // Reset sentinel so next un-linked run defaults
             initStatus = "Initialized - Loaded Pose from Autonomous";
         } else {
@@ -179,12 +187,34 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         // Display repeating position telemetry during INIT phase until driver presses START
         while (!isStarted() && !isStopRequested()) {
             pinpoint.update();
+
+            // No alliance color from Autonomous - detect it here. Limelight data comes and goes
+            // during INIT, so keep the last color seen instead of resetting to "NONE" on a missed frame.
+            if (!allianceFromAuto) {
+                String seenAlliance = detectAllianceColor();
+                if (!seenAlliance.equals("NONE")) {
+                    allianceColor = seenAlliance;
+                }
+            }
+
             updateTelemetry(initStatus);
             sleep(20);
         }
 
         waitForStart();
         runtime.reset();
+
+        // Alliance color is now final
+        if (allianceColor.equals("NONE")) {
+            // No good camera data - don't use the Limelight at all; B-aim uses Pinpoint only
+            if (limelight != null) {
+                limelight.stop();
+                limelight = null;
+            }
+        } else if (!allianceFromAuto) {
+            // Switch Limelight to only see our alliance's tags
+            selectAlliancePipeline();
+        }
 
         // Run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
@@ -273,6 +303,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
     private void updateTelemetry(String status) {
         Pose2D pose = pinpoint.getPosition();
         telemetry.addData("Status", status);
+        telemetry.addData("Alliance", allianceColor + (allianceFromAuto ? " (from Auto)" : ""));
         telemetry.addData("X (in)", pose.getX(DistanceUnit.INCH));
         telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
@@ -326,19 +357,23 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         boolean rightStickActive = rightStickMag > 0.2; // Deadzone check
 
         if (gamepad1.b) {
-            // Only compute the aim target on the initial press. Limelight data is unreliable while
-            // the robot is turning, so the target is latched and held (via Pinpoint heading) until B is released.
-            if (!bWasPressed) {
-                // Attempt Limelight 3D auto-aim first (requires at least 3 fiducials found)
-                double limelightHeading = calculateHeadingFromLimelight(robotHeading);
-
-                if (!Double.isNaN(limelightHeading)) {
-                    targetHeading = limelightHeading;
-                } else {
-                    // Fallback to Pinpoint odometry calculation if Limelight target is unavailable or < 3 tags
-                    targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
-                }
+            // Only read the Limelight when the robot is turning slowly - images taken while rotating
+            // are blurred and give bad aim data, which made the robot oscillate.
+            double turnRateDegPerSec = Math.abs(pinpoint.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
+            double limelightHeading = Double.NaN;
+            if (turnRateDegPerSec < LIMELIGHT_MAX_TURN_RATE_DEG_PER_SEC) {
+                // Limelight 3D auto-aim (requires at least 3 fiducials found)
+                limelightHeading = calculateHeadingFromLimelight(robotHeading);
             }
+
+            if (!Double.isNaN(limelightHeading)) {
+                targetHeading = limelightHeading;
+                limelightAimLocked = true;
+            } else if (!limelightAimLocked) {
+                // No steady Limelight reading yet this press - use Pinpoint odometry calculation
+                targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
+            }
+            // Otherwise keep the last steady Limelight target (held via Pinpoint heading) while turning
 
             rightStickActive = true;
         } else if (rightStickActive) {
@@ -350,7 +385,9 @@ public class Match2LimeLightTeleop extends LinearOpMode {
             targetHeading = robotHeading;
         }
         rightStickWasActive = rightStickActive;
-        bWasPressed = gamepad1.b;
+        if (!gamepad1.b) {
+            limelightAimLocked = false;
+        }
 
         // Calculate heading error using up-to-date targetHeading
         double headingError = AngleUnit.normalizeRadians(targetHeading - robotHeading);
@@ -479,6 +516,57 @@ public class Match2LimeLightTeleop extends LinearOpMode {
 
         // Heading so rearward launcher (-X_robot) points at target:
         return Math.atan2(launcherY - bestHiveY, launcherX - bestHiveX);
+    }
+
+    /**
+     * Looks at all AprilTags the Limelight sees and picks the one closest to the center of the
+     * camera view. Red tags are IDs 30-37, blue tags are IDs 38-45.
+     * Needs Pipeline 0 (all tags) to be active.
+     * @return "RED", "BLUE", or "NONE" if no hive tag is seen
+     */
+    private String detectAllianceColor() {
+        if (limelight == null) {
+            return "NONE";
+        }
+
+        LLResult llResult = limelight.getLatestResult();
+        if (llResult == null || !llResult.isValid()) {
+            return "NONE";
+        }
+
+        int closestTagId = -1;
+        double closestOffsetDegrees = Double.MAX_VALUE;
+        for (LLResultTypes.FiducialResult fiducial : llResult.getFiducialResults()) {
+            // Angle between the tag and the center of the camera view
+            double offsetDegrees = Math.hypot(fiducial.getTargetXDegrees(), fiducial.getTargetYDegrees());
+            if (offsetDegrees < closestOffsetDegrees) {
+                closestOffsetDegrees = offsetDegrees;
+                closestTagId = fiducial.getFiducialId();
+            }
+        }
+
+        if (closestTagId >= 30 && closestTagId <= 37) {
+            return "RED";
+        } else if (closestTagId >= 38 && closestTagId <= 45) {
+            return "BLUE";
+        }
+        return "NONE";
+    }
+
+    /**
+     * Switches the Limelight to the pipeline that only sees our alliance's tags.
+     * Pipeline 1 = red tags only, Pipeline 2 = blue tags only.
+     * If the alliance is NONE, does nothing.
+     */
+    private void selectAlliancePipeline() {
+        if (limelight == null) {
+            return;
+        }
+        if (allianceColor.equals("RED")) {
+            limelight.pipelineSwitch(1);
+        } else if (allianceColor.equals("BLUE")) {
+            limelight.pipelineSwitch(2);
+        }
     }
 
     /**
