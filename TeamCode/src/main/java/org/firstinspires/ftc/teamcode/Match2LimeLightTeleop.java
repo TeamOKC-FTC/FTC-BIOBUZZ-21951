@@ -302,6 +302,11 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         double rawRpm = shooter.getVelocity() * 60 / 28;
         filteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - filteredShooterRpm);
         telemetry.addData("RPMActual=", filteredShooterRpm);
+        telemetry.addData("Right Front Pwr=",frontRightDrive.getPower());
+        telemetry.addData("Left Front Pwr=",frontRightDrive.getPower());
+        telemetry.addData("Right Rear Pwr=",backRightDrive.getPower());
+        telemetry.addData("Left Rear Pwr=",backLeftDrive.getPower());
+
         telemetry.update();
     }
 

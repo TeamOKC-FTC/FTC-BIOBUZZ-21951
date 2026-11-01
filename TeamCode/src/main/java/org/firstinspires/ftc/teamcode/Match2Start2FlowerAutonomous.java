@@ -67,13 +67,13 @@ public class Match2Start2FlowerAutonomous extends LinearOpMode {
     private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
     // Flower location for pollen retrieval
-    private double flowerXInches = -58.0;
-    private double flowerYInches = -54.0;
+    private double flowerXInches = -60.0;
+    private double flowerYInches = -30.5;
     private double flowerHeadingDegrees = 170.0; // 0 deg = Facing Forward away from driver
 
     // Flower pollen retrieval tuning
     private static final int FLOWER_FLIP_CYCLES = 8;          // number of stow/open cycles of the right flipper
-    private static final double FLOWER_FLIP_CYCLE_MS = 1000;  // time for one stow + open cycle
+    private static final double FLOWER_FLIP_CYCLE_MS = 775;  // time for one stow + open cycle
 
     // Heading correction tuning
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction

@@ -67,13 +67,13 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
     private double autoLeaveHeadingDegrees = 90.0; // 0 deg = Facing Forward away from driver
 
     // Flower location for pollen retrieval
-    private double flowerXInches = -41.0;
-    private double flowerYInches = 58.0;
-    private double flowerHeadingDegrees = 100.0; // 0 deg = Facing Forward away from driver
+    private double flowerXInches = -30.0;
+    private double flowerYInches = 59.0;
+    private double flowerHeadingDegrees = 80.0; // 0 deg = Facing Forward away from driver
 
     // Flower pollen retrieval tuning
     private static final int FLOWER_FLIP_CYCLES = 8;          // number of stow/open cycles of the right flipper
-    private static final double FLOWER_FLIP_CYCLE_MS = 1000;  // time for one stow + open cycle
+    private static final double FLOWER_FLIP_CYCLE_MS = 775;  // time for one stow + open cycle
 
     // Heading correction tuning
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
@@ -499,9 +499,18 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
                     advanceStep();
                 }
                 break;
+            case 4:
+                if (moveToWaypoint(90.0, autoStartXInches-3, autoLeaveYInches - 21.0, 8000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
+                    advanceStep();
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
+                    advanceStep();
+                }
+                break;
 
             // ---- Flower pollen retrieval ----
-            case 4:
+            case 5:
                 // Open both flippers and turn the intake on inward (same as teleop)
                 rightFlipper.setPosition(0.0);
                 leftFlipper.setPosition(0.0);
@@ -509,7 +518,7 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
                 advanceStep();
                 break;
 
-            case 5:
+            case 6:
                 if (moveToWaypoint(flowerHeadingDegrees, flowerXInches, flowerYInches, 8000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
@@ -519,7 +528,7 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
                 }
                 break;
 
-            case 6:
+            case 7:
                 // Cycle the right flipper: stowed for the first half of each cycle, open for the second half
                 if (elapsedInStep >= FLOWER_FLIP_CYCLES * FLOWER_FLIP_CYCLE_MS) {
                     advanceStep();
@@ -530,7 +539,7 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
                 }
                 break;
 
-            case 7:
+            case 8:
                 // Stow both flippers and turn the intake off
                 rightFlipper.setPosition(1.0);
                 leftFlipper.setPosition(1.0);
@@ -538,7 +547,7 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
                 advanceStep();
                 break;
 
-            case 8:
+            case 9:
                 // Back away from the flower (robot faces +Y, so back up toward -Y)
                 if (moveToWaypoint(flowerHeadingDegrees, flowerXInches, flowerYInches - 8.0, 3000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
@@ -549,7 +558,7 @@ public class Match2Start1FlowerAutonomous extends LinearOpMode {
                 }
                 break;
 
-            case 9:
+            case 10:
                 if (moveToWaypoint(autoLeaveHeadingDegrees, autoLeaveXInches, autoLeaveYInches, 8000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
