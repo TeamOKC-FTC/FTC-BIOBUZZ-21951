@@ -310,7 +310,7 @@ public class Match1Start3TeleopV2 extends LinearOpMode {
 
         boolean rightStickActive = rightStickMag > 0.2; // Deadzone check
         if (gamepad1.b) {
-            // B depressed: override target heading so rearward ball launcher (-9in, -5in) aims at nearest hive
+            // B depressed: override target heading so rearward ball launcher (-9in, -4in) aims at nearest hive
             targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
             rightStickActive = true;
         } else if (rightStickActive) {
@@ -421,13 +421,13 @@ public class Match1Start3TeleopV2 extends LinearOpMode {
     }
 
     /**
-     * Calculates heading in radians so the rearward-facing ball launcher exit point (-9in X, -5in Y)
+     * Calculates heading in radians so the rearward-facing ball launcher exit point (-9in X, -4in Y)
      * aims directly at the center of the nearest hive opening.
      */
     private double calculateHeadingForLauncherAim(double robotX, double robotY, double robotHeading) {
-        // Transform launcher exit offset (-9.0 in X, -5.0 in Y) into field coordinates
-        double launcherX = robotX - 9.0 * Math.cos(robotHeading) + 5.0 * Math.sin(robotHeading);
-        double launcherY = robotY - 9.0 * Math.sin(robotHeading) - 5.0 * Math.cos(robotHeading);
+        // Transform launcher exit offset (-9.0 in X, -4.0 in Y) into field coordinates
+        double launcherX = robotX - 9.0 * Math.cos(robotHeading) + 4.0 * Math.sin(robotHeading);
+        double launcherY = robotY - 9.0 * Math.sin(robotHeading) - 4.0 * Math.cos(robotHeading);
 
         // Distance to Hive 1 (-12.75, -16.84)
         double hive1X = -12.75;
