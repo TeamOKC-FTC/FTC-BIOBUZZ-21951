@@ -1,31 +1,3 @@
-/* Copyright (c) 2021 FIRST. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted (subject to the limitations in the disclaimer below) provided that
- * the following conditions are met:
- *
- * Redistributions of source code must retain the above copyright notice, this list
- * of conditions and the following disclaimer.
- *
- * Redistributions in binary form must reproduce the above copyright notice, this
- * list of conditions and the following disclaimer in the documentation and/or
- * other materials provided with the distribution.
- *
- * Neither the name of FIRST nor the names of its contributors may be used to endorse or
- * promote products derived from this software without specific prior written permission.
- *
- * NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY THIS
- * LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
 
 package org.firstinspires.ftc.teamcode;
 
@@ -49,6 +21,10 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * Match2Start3Autonomous
  * -----------------------------------------------------------------------------
  * Match 2 Autonomous OpMode for Start 3 position.
+ * After the initial move, waits up to 10 seconds for the hive to drop (hive tags
+ * disappear). If the hive drops, drives to park, then to the Match2Start3AutonomousOrig
+ * start location to shoot, then parks the same way as Match2Start3AutonomousOrig.
+ * Otherwise shoots and parks as normal.
  * At the conclusion of autonomous, saves the final Pinpoint pose into
  * PoseStorage.currentPose so that TeleOp can carry over exact field position.
  * -----------------------------------------------------------------------------
@@ -85,13 +61,28 @@ public class Match2Start3Autonomous extends LinearOpMode {
     private double yPodOffsetInches = -(17.0/2.0-2.0); // Y pod offset + is forward from robot center (-168 mm)
 
     // Starting Match Pose
-    private double autoStartXInches = -9.5;
-    private double autoStartYInches =  71.0-9.0;
-    private double autoStartHeadingDegrees = 90.0; // 0 deg = Facing Forward away from driver
+    private double autoStartXInches = -18.5-1.0-9.0;
+    private double autoStartYInches =  -71.0+9.0;
+    private double autoStartHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
-    private double autoLeaveXInches = -71.0+7.0+9.0;
-    private double autoLeaveYInches =  44.0+9.0;
-    private double autoLeaveHeadingDegrees = 90.0; // 0 deg = Facing Forward away from driver
+    private double autoLeaveXInches = -71.0+5.0+9.0;
+    private double autoLeaveYInches =  24.0+4.0-9.0;
+    private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
+
+    // Start and leave locations used in Match2Start3AutonomousOrig - used after a hive drop
+    private double origStartXInches = -9.5;
+    private double origStartYInches =  71.0-9.0;
+    private double origStartHeadingDegrees = 90.0; // 0 deg = Facing Forward away from driver
+
+    private double origLeaveXInches = -71.0+7.0+9.0;
+    private double origLeaveYInches =  44.0+9.0;
+    private double origLeaveHeadingDegrees = 90.0; // 0 deg = Facing Forward away from driver
+
+    // Hive drop detection tuning
+    private static final double HIVE_DROP_WAIT_MS = 10000;  // how long to wait for the hive to drop
+    private static final double HIVE_DROP_DWELL_MS = 1000;  // tags must be gone this long in a row (Limelight data flickers)
+    private boolean hiveTagsSeenThisWait = false; // a drop only counts if the tags were seen first
+    private double hiveTagsMissingSinceMs = -1;
 
     // Heading correction tuning
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
@@ -487,29 +478,13 @@ public class Match2Start3Autonomous extends LinearOpMode {
         double elapsedInStep = nowMs - stepStartTimeMs;
 
         switch (autoStep) {
-            case 0:
+            case 0:    //turn on launcher
                 shooter.setVelocity(shooterSpeed);
                 advanceStep();
                 break;
 
-            case 1:
-                boolean rpmOk = RPM_OK();
-                if (elapsedInStep >= 18000.0 && (rpmOk || elapsedInStep >= 20000.0)) {
-                    gate.setPosition(0.0);
-                    advanceStep();
-                }
-                break;
-
-            case 2:
-                if (elapsedInStep >= 3000.0) {
-                    gate.setPosition(1.0);
-                    shooter.setVelocity(0.0);
-                    advanceStep();
-                }
-                break;
-
-            case 3:
-                if (moveToWaypoint(autoStartHeadingDegrees, autoStartXInches, autoStartYInches - 8.0, 3000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
+            case 1:  //move to a possible shoot point for scoring in initial up hive
+                if (moveToWaypoint(autoStartHeadingDegrees - 20.0, autoStartXInches - 1.0, autoStartYInches + 2.0, 3000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
                 if (elapsedInStep >= 5000.0) {
@@ -518,13 +493,110 @@ public class Match2Start3Autonomous extends LinearOpMode {
                 }
                 break;
 
+            case 2:
+                // Wait for the hive to drop. If it drops, take the hive drop path (step 10).
+                // No camera, or tags never seen during the wait, is treated the same as a hive drop.
+                if (limelight == null || hiveDropDetected()) {
+                    jumpToStep(10);
+                } else if (elapsedInStep >= HIVE_DROP_WAIT_MS) {
+                    if (hiveTagsSeenThisWait) {
+                        advanceStep(); // tags still there - hive did not drop
+                    } else {
+                        jumpToStep(10); // tags never seen
+                    }
+                }
+                break;
+
+            // ---- Normal path: hive did not drop - shoot from here and park ----
+            case 3:
+                if (elapsedInStep >= 2000.0 || RPM_OK()) {
+                    gate.setPosition(0.0);
+                    advanceStep();
+                }
+                break;
+
             case 4:
+                if (elapsedInStep >= 3000.0) {
+                    gate.setPosition(1.0);
+                    shooter.setVelocity(0.0);
+                    advanceStep();
+                }
+                break;
+
+            case 5:
                 if (moveToWaypoint(autoLeaveHeadingDegrees, autoLeaveXInches, autoLeaveYInches, 8000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
+                    jumpToStep(99);
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
+                    jumpToStep(99);
+                }
+                break;
+
+            // ---- Hive drop path: park, drive to Orig start location, shoot, park like Orig ----
+            case 10:
+                if (moveToWaypoint(autoLeaveHeadingDegrees, autoLeaveXInches, autoLeaveYInches, 8000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
                 if (elapsedInStep >= 10000.0) {
                     stopAllDriveMotors(false);
                     advanceStep();
+                }
+                break;
+
+            case 11:
+                if (moveToWaypoint(origStartHeadingDegrees, origStartXInches, origStartYInches-8.0, 8000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
+                    advanceStep();
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
+                    advanceStep();
+                }
+                break;
+
+            case 12:
+                if (moveToWaypoint(origStartHeadingDegrees, origStartXInches, origStartYInches, 8000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
+                    advanceStep();
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
+                    advanceStep();
+                }
+                break;
+
+            case 13:
+                if (elapsedInStep >= 2000.0 || RPM_OK()) {
+                    gate.setPosition(0.0);
+                    advanceStep();
+                }
+                break;
+
+            case 14:
+                if (elapsedInStep >= 3000.0) {
+                    gate.setPosition(1.0);
+                    shooter.setVelocity(0.0);
+                    advanceStep();
+                }
+                break;
+
+            // Final park - same steps as Match2Start3AutonomousOrig
+            case 15:
+                if (moveToWaypoint(origStartHeadingDegrees, origStartXInches, origStartYInches - 8.0, 3000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
+                    advanceStep();
+                }
+                if (elapsedInStep >= 5000.0) {
+                    stopAllDriveMotors(false);
+                    advanceStep();
+                }
+                break;
+
+            case 16:
+                if (moveToWaypoint(origLeaveHeadingDegrees, origLeaveXInches, origLeaveYInches, 8000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
+                    jumpToStep(99);
+                }
+                if (elapsedInStep >= 10000.0) {
+                    stopAllDriveMotors(false);
+                    jumpToStep(99);
                 }
                 break;
 
@@ -537,6 +609,35 @@ public class Match2Start3Autonomous extends LinearOpMode {
     private void advanceStep() {
         autoStep++;
         stepStartTimeMs = -1;
+    }
+
+    // Jump to any step number (used to branch between the normal and hive drop paths)
+    private void jumpToStep(int step) {
+        autoStep = step;
+        stepStartTimeMs = -1;
+    }
+
+    /**
+     * Non-blocking hive drop check - call once per loop. Returns true once the hive tags have
+     * been seen, then stayed gone for HIVE_DROP_DWELL_MS in a row. Limelight data comes and goes,
+     * so a few missed frames don't count as a drop. If the tags were never seen (camera can't see
+     * the hive, or no Limelight), this never returns true.
+     */
+    private boolean hiveDropDetected() {
+        boolean tagsSeen = !detectAllianceColor().equals("NONE");
+        double nowMs = runtime.milliseconds();
+        if (tagsSeen) {
+            hiveTagsSeenThisWait = true;
+            hiveTagsMissingSinceMs = -1;
+            return false;
+        }
+        if (!hiveTagsSeenThisWait) {
+            return false;
+        }
+        if (hiveTagsMissingSinceMs < 0) {
+            hiveTagsMissingSinceMs = nowMs;
+        }
+        return (nowMs - hiveTagsMissingSinceMs) >= HIVE_DROP_DWELL_MS;
     }
 
     private void initPinpoint(double xPodOffsetInches, double yPodOffsetInches, double startXInches, double startYInches, double startHeadingDegrees) {
