@@ -106,6 +106,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
     private double targetDistanceInches = 0.0; // Global target distance to hive opening (in inches)
     private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
     private boolean limelightAimLocked = false; // true once a steady Limelight aim was taken during the current B press
+    private String aimMethod = "OFF"; // which data the B-aim used this loop: OFF, PINPOINT, TAGS, or TAGS HELD (shown in telemetry)
     private static final double LIMELIGHT_MAX_TURN_RATE_DEG_PER_SEC = 20.0; // only trust Limelight when turning slower than this (motion blur)
     // Heading correction tuning.
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
@@ -308,6 +309,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
+        telemetry.addData("Aim Method", aimMethod);
         telemetry.addData("Target Distance (in)", "%.1f", targetDistanceInches);
         telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
 
@@ -369,11 +371,15 @@ public class Match2LimeLightTeleop extends LinearOpMode {
             if (!Double.isNaN(limelightHeading)) {
                 targetHeading = limelightHeading;
                 limelightAimLocked = true;
+                aimMethod = "TAGS";
             } else if (!limelightAimLocked) {
                 // No steady Limelight reading yet this press - use Pinpoint odometry calculation
                 targetHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
+                aimMethod = "PINPOINT";
+            } else {
+                // Otherwise keep the last steady Limelight target (held via Pinpoint heading) while turning
+                aimMethod = "TAGS HELD";
             }
-            // Otherwise keep the last steady Limelight target (held via Pinpoint heading) while turning
 
             rightStickActive = true;
         } else if (rightStickActive) {
@@ -387,6 +393,7 @@ public class Match2LimeLightTeleop extends LinearOpMode {
         rightStickWasActive = rightStickActive;
         if (!gamepad1.b) {
             limelightAimLocked = false;
+            aimMethod = "OFF";
         }
 
         // Calculate heading error using up-to-date targetHeading
