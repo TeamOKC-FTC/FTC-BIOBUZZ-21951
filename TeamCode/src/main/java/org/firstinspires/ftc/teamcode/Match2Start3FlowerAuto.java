@@ -583,11 +583,11 @@ public class Match2Start3FlowerAuto extends LinearOpMode {
                 // Shooting takes 3 sec total. Open the gate once RPM is OK (or after 1 sec
                 // regardless), then close it and stop the shooter at the 3 sec mark.
                 if (elapsedInStep >= SHOOT_TOTAL_MS) {
-                    gate.setPosition(1.0);
+                    gate.setPosition(1.0);  //gate closed
                     shooter.setVelocity(0.0);
                     jumpToStep(20);
                 } else if (RPM_OK() || elapsedInStep >= SHOOT_MAX_RPM_WAIT_MS) {
-                    gate.setPosition(0.0);
+                    gate.setPosition(0.0);  //gate open
                 }
                 break;
 
@@ -604,11 +604,12 @@ public class Match2Start3FlowerAuto extends LinearOpMode {
                 break;
 
             case 21:
-                // Open the right flipper (left flipper stays stowed all auto).
+                // Open the right flipper (left flipper stays stowed all auto when intake stays off).
                 // Intake only runs if we shot (hive rose).
                 rightFlipper.setPosition(0.0);
                 if (runIntakeAtFlower) {
                     intake.setPower(1.0); //bring in speciman
+                    rightFlipper.setPosition(0.0);
                 }
                 advanceStep();
                 break;
