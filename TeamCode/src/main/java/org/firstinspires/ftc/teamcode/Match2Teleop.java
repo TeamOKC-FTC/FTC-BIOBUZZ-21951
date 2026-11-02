@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -22,6 +23,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  */
 
 @TeleOp(name="Match2Teleop", group="Linear OpMode")
+@Disabled
 public class Match2Teleop extends LinearOpMode {
 
     // Declare OpMode members for hardware.
