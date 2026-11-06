@@ -610,6 +610,7 @@ public class Match2Start3FlowerAuto extends LinearOpMode {
                 if (runIntakeAtFlower) {
                     intake.setPower(1.0); //bring in speciman
                     rightFlipper.setPosition(0.0);
+                    leftFlipper.setPosition(0.0);
                 }
                 advanceStep();
                 break;
@@ -658,6 +659,8 @@ public class Match2Start3FlowerAuto extends LinearOpMode {
             case 26:
                 // Back away from the flower (robot faces +Y, so back up toward -Y)
                 if (moveToWaypoint(activeFlowerHeadingDegrees, flowerXInches, flowerYInches - FLOWER_APPROACH_OFFSET_INCHES, 3000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
+                    rightFlipper.setPosition(0.0);
+                    leftFlipper.setPosition(0.0);
                     advanceStep();
                 }
                 if (elapsedInStep >= 5000.0) {
