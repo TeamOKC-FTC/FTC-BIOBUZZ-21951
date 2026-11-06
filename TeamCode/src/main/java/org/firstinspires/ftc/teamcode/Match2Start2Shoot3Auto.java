@@ -25,6 +25,8 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * disappear). If the hive drops, drives to park, then to the Match2Start3AutonomousOrig
  * start location to shoot, then parks the same way as Match2Start3AutonomousOrig.
  * Otherwise shoots and parks as normal.
+ * If the alliance is still NONE at START, the camera is turned off and the robot takes the
+ * hive drop path right away, holding its shot until NO_CAMERA_MIN_SHOOT_MS.
  * At the conclusion of autonomous, saves the final Pinpoint pose into
  * PoseStorage.currentPose so that TeleOp can carry over exact field position.
  * -----------------------------------------------------------------------------
@@ -83,6 +85,7 @@ public class Match2Start2Shoot3Auto extends LinearOpMode {
     private static final double HIVE_DROP_DWELL_MS = 1000;  // tags must be gone this long in a row (Limelight data flickers)
     private boolean hiveTagsSeenThisWait = false; // a drop only counts if the tags were seen first
     private double hiveTagsMissingSinceMs = -1;
+    private static final double NO_CAMERA_MIN_SHOOT_MS = 18000; // with no camera, don't shoot before this match time (same as Match2Start3AutonomousOrig)
 
     // Heading correction tuning
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
@@ -202,8 +205,17 @@ public class Match2Start2Shoot3Auto extends LinearOpMode {
         waitForStart();
         runtime.reset();
 
-        // Alliance color is now final - switch Limelight to only see our alliance's tags
-        selectAlliancePipeline();
+        // Alliance color is now final
+        if (allianceColor.equals("NONE")) {
+            // No alliance - don't use the Limelight at all; step 2 goes straight to the hive drop path
+            if (limelight != null) {
+                limelight.stop();
+                limelight = null;
+            }
+        } else {
+            // Switch Limelight to only see our alliance's tags
+            selectAlliancePipeline();
+        }
 
         // Run the autonomous sequence until it completes or the match period ends
         while (opModeIsActive()) {
@@ -565,7 +577,10 @@ public class Match2Start2Shoot3Auto extends LinearOpMode {
                 break;
 
             case 13:
-                if (elapsedInStep >= 2000.0 || RPM_OK()) {
+                // With no camera we skipped the hive wait and may arrive early, so hold the shot
+                // until NO_CAMERA_MIN_SHOOT_MS to give the hive time to come up.
+                if ((limelight != null || runtime.milliseconds() >= NO_CAMERA_MIN_SHOOT_MS)
+                        && (elapsedInStep >= 2000.0 || RPM_OK())) {
                     gate.setPosition(0.0);
                     advanceStep();
                 }

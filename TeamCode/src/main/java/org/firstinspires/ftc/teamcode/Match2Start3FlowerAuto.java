@@ -17,7 +17,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit;
 
 /*
- * Match2Start3Auto
+ * Match2Start3FlowerAuto
  * -----------------------------------------------------------------------------
  * Match 2 Autonomous OpMode for Start 3 position (the hive-down side).
  * From Start 3 our own alliance's hive tags are not visible at the start, so during INIT
@@ -36,7 +36,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  * -----------------------------------------------------------------------------
  */
 
-@Autonomous(name="Match2Start3Auto", group="Linear OpMode", preselectTeleOp="Match2LimeLightTeleop")
+@Autonomous(name="Match2Start3FlowerAuto", group="Linear OpMode", preselectTeleOp="Match2LimeLightTeleop")
 public class Match2Start3FlowerAuto extends LinearOpMode {
 
     // Declare OpMode members for hardware.
