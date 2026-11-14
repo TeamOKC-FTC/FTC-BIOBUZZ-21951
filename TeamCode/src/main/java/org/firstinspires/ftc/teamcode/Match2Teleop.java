@@ -234,6 +234,8 @@ public class Match2Teleop extends LinearOpMode {
         telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
         telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
+        telemetry.addData("Target Distance (in)", calculateLauncherDistanceToNearestHive(
+                pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), pose.getHeading(AngleUnit.RADIANS)));
         telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
         if (shooteron) {
             telemetry.addData("RPMcommand=", shooterSpeed * 60 / 28);
@@ -405,5 +407,20 @@ public class Match2Teleop extends LinearOpMode {
 
         // Heading so rearward launcher (-X_robot) points at target:
         return Math.atan2(launcherY - bestHiveY, launcherX - bestHiveX);
+    }
+
+    /**
+     * TELEMETRY ONLY. Distance in inches from the launcher exit point (-9in X, -4in Y) to the
+     * center of the nearest hive opening. Uses the same math as calculateHeadingForLauncherAim,
+     * but changes no state and does not affect driving or aiming.
+     */
+    private double calculateLauncherDistanceToNearestHive(double robotX, double robotY, double robotHeading) {
+        double launcherX = robotX - 9.0 * Math.cos(robotHeading) + 4.0 * Math.sin(robotHeading);
+        double launcherY = robotY - 9.0 * Math.sin(robotHeading) - 4.0 * Math.cos(robotHeading);
+
+        double dist1 = Math.hypot(launcherX - (-12.75), launcherY - (-16.84)); // Hive 1
+        double dist2 = Math.hypot(launcherX - (-12.75), launcherY - 16.84);    // Hive 2
+
+        return Math.min(dist1, dist2);
     }
 }
