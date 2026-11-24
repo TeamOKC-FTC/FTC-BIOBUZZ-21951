@@ -52,7 +52,7 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
     // Shooter RPM scales with distance to goal (same as Match3LimeLightTeleopV2):
     //   RPM = RPMGain * RPMSlope * distance(inches) + RPMOffset
     private double pollenShooterRPMSlope = 3.3;
-    private double pollenShooterRPMOffset = 2366;
+    private double pollenShooterRPMOffset = 2400;  //match 2 data was 2366
     private double pollenShooterRPMGain = 1.0; // fixed in auto (no dpad adjustment)
     private static final double SHOOTER_RPM_MAX_DISTANCE_INCHES = 65.0; // distance used in RPM calculation is limited to this
     private int pollenShooterSpeed = 2366 * 28 / 60; // RPM converted to ticks/sec (recomputed every loop from distance)
@@ -82,6 +82,11 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
     private double autoStartYInches =  -71.0+9.0;
     private double autoStartHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
 
+    // Shoot position - used for the first shot and again after the flower
+    private double shootHeadingDegrees = autoStartHeadingDegrees - 20.0;
+    private double shootXInches = autoStartXInches - 1.0;
+    private double shootYInches = autoStartYInches + 2.0;
+
     private double autoLeaveXInches = -71.0+5.0+9.0;
     private double autoLeaveYInches =  24.0+4.0-9.0;
     private double autoLeaveHeadingDegrees = -90.0; // 0 deg = Facing Forward away from driver
@@ -92,7 +97,7 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
     private double flowerHeadingDegrees = 170.0; // 0 deg = Facing Forward away from driver
 
     // Flower pollen retrieval tuning
-    private static final int FLOWER_FLIP_CYCLES = 8;          // number of stow/open cycles of the right flipper
+    private static final int FLOWER_FLIP_CYCLES = 5;          // number of stow/open cycles of the right flipper (was 8)
     private static final double FLOWER_FLIP_CYCLE_MS = 775.0 / 1.5;  // time for one stow + open cycle (V2 robot flippers are 1.5x faster, was 775)
 
     // Heading correction tuning
@@ -115,6 +120,8 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
     private static final double HEADING_TOLERANCE_DEGREES = 2.0;
     private static final double PRECISE_POSITION_TOLERANCE_INCHES = 1.0;
     private static final double PRECISE_HEADING_TOLERANCE_DEGREES = 1.5;
+    private static final double PASS_THROUGH_POSITION_TOLERANCE_INCHES = 3.0; // pass-through waypoint, no full stop
+    private static final double PASS_THROUGH_HEADING_TOLERANCE_DEGREES = 5.0; // pass-through waypoint, no full stop
 
     // Zero-power bands
     private static final double ZERO_POWER_BAND_FRACTION = 0.5;
@@ -129,6 +136,19 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
     private static final double RPM_TOLERANCE_MIN_FLOOR = 20;
     private static final double RPM_OK_DWELL_MS = 1000;
     private double rpmInBandSinceMs = -1;
+    private boolean rpmReady = false; // RPM_OK() result, checked every loop so the 1 sec dwell is met while driving
+
+    // Shooting tuning (same approach as Match3Start3FlowerAutoV2)
+    private static final double SHOOT_GATE_OPEN_MS = 2250;    // gate stays open this long (4 pollen take ~2 sec), then closes
+    private static final double SHOOT_MAX_RPM_WAIT_MS = 1000; // open the gate by this mark even if RPM isn't OK
+    private double gateOpenedAtMs = -1;                       // time the gate opened during the current shot (-1 = not yet)
+
+    // Hive check before the second shot (same tag detection as Match3Start3FlowerAutoV2)
+    private static final double HIVE_RISE_WAIT_MS = 1000;       // look for our hive tags this long before deciding the hive is down
+    private static final int    HIVE_RISE_MIN_TAGS = 3;       // at least this many of our tags must be seen
+    private static final double HIVE_RISE_DWELL_MS = 250;     // tags must be seen this long in a row (Limelight data flickers)
+    private double hiveTagsSeenSinceMs = -1;
+    private int hiveTagCount = 0;
 
     // moveToWaypoint non-blocking state
     private boolean moveActive = false;
@@ -222,6 +242,7 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
             pinpoint.update();
             updateShooterRpmFilter();
             updateShooterSpeed(); // shooter RPM follows distance to goal every loop
+            rpmReady = RPM_OK();  // check every loop so the RPM dwell is already met when we reach the shoot position
 
             runAutonomousSequence();
 
@@ -306,6 +327,7 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
         telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
         telemetry.addData("Target Distance (in)", "%.1f", targetDistanceInches);
         telemetry.addData("Auto Step", autoStep);
+        telemetry.addData("Hive Tags Seen", hiveTagCount);
         telemetry.addData("RPMcommand=", pollenShooterSpeed * 60 / 28);
         telemetry.addData("RPMActual=", pollenFilteredRPM);
         telemetry.update();
@@ -498,7 +520,8 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
                 break;
 
             case 1:
-                if (moveToWaypoint(autoStartHeadingDegrees - 20.0, autoStartXInches - 1.0, autoStartYInches + 2.0, 3000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
+                // Move to the shoot position
+                if (moveToWaypoint(shootHeadingDegrees, shootXInches, shootYInches, 3000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
                 if (elapsedInStep >= 5000.0) {
@@ -508,17 +531,9 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
                 break;
 
             case 2:
-                if (elapsedInStep >= 2000.0 || RPM_OK()) {
-                    pollenGate.setPosition(pollenGateOpen);
-                    advanceStep();
-                }
-                break;
-
-            case 3:
-                if (elapsedInStep >= 3000.0) {
-                    pollenGate.setPosition(pollenGateClosed);
-                    shooterOn = false;
-                    advanceStep();
+                // First shot
+                if (runShot(nowMs, elapsedInStep)) {
+                    jumpToStep(4);
                 }
                 break;
 
@@ -562,8 +577,9 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
                 break;
 
             case 8:
-                // Back away from the flower
-                if (moveToWaypoint(flowerHeadingDegrees, flowerXInches + 8.0, flowerYInches, 3000, true, POSITION_TOLERANCE_INCHES, HEADING_TOLERANCE_DEGREES)) {
+                // Back away from the flower. Pass-through point: no full stop, robot carries straight
+                // into the drive back to the shoot position (step 9).
+                if (moveToWaypoint(flowerHeadingDegrees, flowerXInches + 8.0, flowerYInches, 3000, false, PASS_THROUGH_POSITION_TOLERANCE_INCHES, PASS_THROUGH_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
                 if (elapsedInStep >= 5000.0) {
@@ -572,7 +588,58 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
                 }
                 break;
 
+            // ---- Return to the shoot position, shoot again only if the hive is still up ----
             case 9:
+                if (allianceColor.equals("NONE")) {
+                    // No alliance detected - can't check the hive, so skip the second shot
+                    // and go straight to park
+                    shooterOn = false;
+                    jumpToStep(13);
+                    break;
+                }
+                // Spin the shooter up while driving back to the shoot position
+                shooterOn = true;
+                if (moveToWaypoint(shootHeadingDegrees, shootXInches, shootYInches, 5000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
+                    hiveTagsSeenSinceMs = -1;
+                    advanceStep();
+                }
+                if (elapsedInStep >= 8000.0) {
+                    stopAllDriveMotors(false);
+                    hiveTagsSeenSinceMs = -1;
+                    advanceStep();
+                }
+                break;
+
+            case 10:
+                // Hive check: our tags seen -> hive still up, shoot. Not seen in time -> hive down, park.
+                if (hiveRiseDetected()) {
+                    advanceStep();
+                } else if (elapsedInStep >= HIVE_RISE_WAIT_MS) {
+                    shooterOn = false;
+                    jumpToStep(13);
+                }
+                break;
+
+            case 11:
+                // Second shot
+                if (runShot(nowMs, elapsedInStep)) {
+                    jumpToStep(13);
+                }
+                break;
+
+            // ---- Park ----
+            case 13:
+                // Pass through the back-away point on the way to park (no full stop)
+                if (moveToWaypoint(autoLeaveHeadingDegrees, flowerXInches + 8.0, flowerYInches, 5000, false, PASS_THROUGH_POSITION_TOLERANCE_INCHES, PASS_THROUGH_HEADING_TOLERANCE_DEGREES)) {
+                    advanceStep();
+                }
+                if (elapsedInStep >= 7000.0) {
+                    stopAllDriveMotors(false);
+                    advanceStep();
+                }
+                break;
+
+            case 14:
                 if (moveToWaypoint(autoLeaveHeadingDegrees, autoLeaveXInches, autoLeaveYInches, 8000, true, PRECISE_POSITION_TOLERANCE_INCHES, PRECISE_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
@@ -652,6 +719,80 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
 
         // Heading so rearward launcher (-X_robot) points at target:
         return Math.atan2(launcherY - bestHiveY, launcherX - bestHiveX);
+    }
+
+    /**
+     * Runs one shot - call once per loop while shooting. Opens the gate as soon as RPM is OK
+     * (or after SHOOT_MAX_RPM_WAIT_MS regardless), keeps it open for SHOOT_GATE_OPEN_MS,
+     * then closes it and turns the shooter off.
+     * @return true once the shot is finished
+     */
+    private boolean runShot(double nowMs, double elapsedInStep) {
+        if (gateOpenedAtMs < 0) {
+            if (rpmReady || elapsedInStep >= SHOOT_MAX_RPM_WAIT_MS) {
+                pollenGate.setPosition(pollenGateOpen);
+                gateOpenedAtMs = nowMs;
+            }
+            return false;
+        }
+        if (nowMs - gateOpenedAtMs >= SHOOT_GATE_OPEN_MS) {
+            pollenGate.setPosition(pollenGateClosed);
+            shooterOn = false;
+            gateOpenedAtMs = -1; // ready for the next shot
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Counts how many of OUR alliance's hive tags the Limelight sees right now.
+     * Red tags are IDs 30-37, blue tags are IDs 38-45. Tags of the other color are ignored.
+     * @return number of our tags seen, or 0 if no Limelight / no alliance / no valid result
+     */
+    private int countAllianceTags() {
+        if (limelight == null || allianceColor.equals("NONE")) {
+            return 0;
+        }
+
+        LLResult llResult = limelight.getLatestResult();
+        if (llResult == null || !llResult.isValid()) {
+            return 0;
+        }
+
+        int minId = allianceColor.equals("RED") ? 30 : 38;
+        int maxId = allianceColor.equals("RED") ? 37 : 45;
+        int count = 0;
+        for (LLResultTypes.FiducialResult fiducial : llResult.getFiducialResults()) {
+            int id = fiducial.getFiducialId();
+            if (id >= minId && id <= maxId) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Non-blocking hive-up check - call once per loop. Returns true once at least
+     * HIVE_RISE_MIN_TAGS of our tags have been seen for HIVE_RISE_DWELL_MS in a row.
+     * If there is no Limelight or our alliance is unknown, this never returns true (hive treated as down).
+     */
+    private boolean hiveRiseDetected() {
+        hiveTagCount = countAllianceTags();
+        double nowMs = runtime.milliseconds();
+        if (hiveTagCount < HIVE_RISE_MIN_TAGS) {
+            hiveTagsSeenSinceMs = -1;
+            return false;
+        }
+        if (hiveTagsSeenSinceMs < 0) {
+            hiveTagsSeenSinceMs = nowMs;
+        }
+        return (nowMs - hiveTagsSeenSinceMs) >= HIVE_RISE_DWELL_MS;
+    }
+
+    // Jump to any step number (used to branch between shoot again / park)
+    private void jumpToStep(int step) {
+        autoStep = step;
+        stepStartTimeMs = -1;
     }
 
     private void advanceStep() {

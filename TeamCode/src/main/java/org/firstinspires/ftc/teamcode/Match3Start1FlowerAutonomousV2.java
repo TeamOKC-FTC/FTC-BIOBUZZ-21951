@@ -52,7 +52,7 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
     // Shooter RPM scales with distance to goal (same as Match3LimeLightTeleopV2):
     //   RPM = RPMGain * RPMSlope * distance(inches) + RPMOffset
     private double pollenShooterRPMSlope = 3.3;
-    private double pollenShooterRPMOffset = 2366;
+    private double pollenShooterRPMOffset = 2400;  //match 2 data was 2366
     private double pollenShooterRPMGain = 1.0; // fixed in auto (no dpad adjustment)
     private static final double SHOOTER_RPM_MAX_DISTANCE_INCHES = 65.0; // distance used in RPM calculation is limited to this
     private int pollenShooterSpeed = 2366 * 28 / 60; // RPM converted to ticks/sec (recomputed every loop from distance)
@@ -92,7 +92,7 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
     private double flowerHeadingDegrees = 80.0; // 0 deg = Facing Forward away from driver
 
     // Flower pollen retrieval tuning
-    private static final int FLOWER_FLIP_CYCLES = 8;          // number of stow/open cycles of the right flipper
+    private static final int FLOWER_FLIP_CYCLES = 5;          // number of stow/open cycles of the right flipper (was 8)
     private static final double FLOWER_FLIP_CYCLE_MS = 775.0 / 1.5;  // time for one stow + open cycle (V2 robot flippers are 1.5x faster, was 775)
 
     // Heading correction tuning
@@ -129,6 +129,12 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
     private static final double RPM_TOLERANCE_MIN_FLOOR = 20;
     private static final double RPM_OK_DWELL_MS = 1000;
     private double rpmInBandSinceMs = -1;
+    private boolean rpmReady = false; // RPM_OK() result, checked every loop so the 1 sec dwell is met while spinning up
+
+    // Shooting tuning (same as the other Match3 V2 autos)
+    private static final double SHOOT_GATE_OPEN_MS = 2250;    // gate stays open this long (4 pollen take ~2 sec), then closes
+    private static final double SHOOT_MAX_RPM_WAIT_MS = 4000; // open the gate by this mark even if RPM isn't OK (longer here: shooter only starts at START)
+    private double gateOpenedAtMs = -1;                       // time the gate opened during the current shot (-1 = not yet)
 
     // moveToWaypoint non-blocking state
     private boolean moveActive = false;
@@ -222,6 +228,7 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
             pinpoint.update();
             updateShooterRpmFilter();
             updateShooterSpeed(); // shooter RPM follows distance to goal every loop
+            rpmReady = RPM_OK();  // check every loop so the RPM dwell is tracked continuously
 
             runAutonomousSequence();
 
@@ -499,17 +506,9 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
                 break;
 
             case 1:
-                if (elapsedInStep >= 4000.0 || RPM_OK()) {
-                    pollenGate.setPosition(pollenGateOpen);
-                    advanceStep();
-                }
-                break;
-
-            case 2:
-                if (elapsedInStep >= 3000.0) {
-                    pollenGate.setPosition(pollenGateClosed);
-                    shooterOn = false;
-                    advanceStep();
+                // Shoot from the start position
+                if (runShot(nowMs, elapsedInStep)) {
+                    jumpToStep(3);
                 }
                 break;
 
@@ -661,6 +660,35 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
 
         // Heading so rearward launcher (-X_robot) points at target:
         return Math.atan2(launcherY - bestHiveY, launcherX - bestHiveX);
+    }
+
+    /**
+     * Runs one shot - call once per loop while shooting. Opens the gate as soon as RPM is OK
+     * (or after SHOOT_MAX_RPM_WAIT_MS regardless), keeps it open for SHOOT_GATE_OPEN_MS,
+     * then closes it and turns the shooter off.
+     * @return true once the shot is finished
+     */
+    private boolean runShot(double nowMs, double elapsedInStep) {
+        if (gateOpenedAtMs < 0) {
+            if (rpmReady || elapsedInStep >= SHOOT_MAX_RPM_WAIT_MS) {
+                pollenGate.setPosition(pollenGateOpen);
+                gateOpenedAtMs = nowMs;
+            }
+            return false;
+        }
+        if (nowMs - gateOpenedAtMs >= SHOOT_GATE_OPEN_MS) {
+            pollenGate.setPosition(pollenGateClosed);
+            shooterOn = false;
+            gateOpenedAtMs = -1; // ready for the next shot
+            return true;
+        }
+        return false;
+    }
+
+    // Jump to any step number
+    private void jumpToStep(int step) {
+        autoStep = step;
+        stepStartTimeMs = -1;
     }
 
     private void advanceStep() {
