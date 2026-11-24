@@ -75,6 +75,11 @@ public class Match3LimeLightTeleop extends LinearOpMode {
     private final int BTN_LEFT_BUMPER = 6;
     private final int BTN_X = 7;
     private final int BTN_B = 8;
+    private final double pollenGateClosed=1.0;
+    private final double pollenGateOpen=0.6;
+    private final double nectarGateClosed=0.35;
+    private final double nectarGateOpen=0.5;
+
 
     private final double[] buttonLastPressTime = new double[9];
     private final boolean[] buttonLastState = new boolean[9];
@@ -125,13 +130,13 @@ public class Match3LimeLightTeleop extends LinearOpMode {
         pollenGate.setDirection(Servo.Direction.FORWARD);
         nectarGate.setDirection(Servo.Direction.FORWARD);
 
-        pollenGate.setPosition(1.0);          // blocked
-        nectarGate.setPosition(1.0);          // blocked
+        pollenGate.setPosition(pollenGateClosed);          // blocked
+        nectarGate.setPosition(nectarGateClosed);          // blocked
 
-        pollenShooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
+        pollenShooter.setVelocityPIDFCoefficients(450, 0, 0, 13.0);
         pollenShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         pollenShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        nectarShooter.setVelocityPIDFCoefficients(350, 0, 0, 12.53);
+        nectarShooter.setVelocityPIDFCoefficients(450, 0, 0, 12.53);
         nectarShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         nectarShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
@@ -220,8 +225,8 @@ public class Match3LimeLightTeleop extends LinearOpMode {
 
             //If intake then on gate off.
             if (Math.abs(intake.getPower())>.2){
-                pollenGate.setPosition(1.0);
-                nectarGate.setPosition(1.0);
+                pollenGate.setPosition(pollenGateClosed);
+                nectarGate.setPosition(nectarGateClosed);
             }
 
             // Shooter speed adjustments
@@ -271,17 +276,17 @@ public class Match3LimeLightTeleop extends LinearOpMode {
                     rightFlipper.setPosition(0.0);
                     flipperrightstowed = false;
                 } else {
-                    rightFlipper.setPosition(1.0);
+                    rightFlipper.setPosition(0.65);
                     flipperrightstowed = true;
                 }
             }
 
             if (isPressed(gamepad1.left_bumper, BTN_LEFT_BUMPER)) {
                 if (flipperleftstowed) {
-                    leftFlipper.setPosition(0.0);
+                    leftFlipper.setPosition(.05);
                     flipperleftstowed = false;
                 } else {
-                    leftFlipper.setPosition(1.0);
+                    leftFlipper.setPosition(.7);
                     flipperleftstowed = true;
                 }
             }
@@ -289,20 +294,20 @@ public class Match3LimeLightTeleop extends LinearOpMode {
             // Gate toggle
             if (isPressed(gamepad2.x, BTN_X)) {
                 if (pollenGateBlocked) {
-                    pollenGate.setPosition(0.0);
+                    pollenGate.setPosition(pollenGateOpen);
                     pollenGateBlocked = false;
                 } else {
-                    pollenGate.setPosition(1.0);
+                    pollenGate.setPosition(pollenGateClosed);
                     pollenGateBlocked = true;
                 }
             }
             // Gate toggle
             if (isPressed(gamepad2.b, BTN_B)) {
                 if (nectarGateBlocked) {
-                    nectarGate.setPosition(0.0);
+                    nectarGate.setPosition(nectarGateOpen);
                     nectarGateBlocked = false;
                 } else {
-                    nectarGate.setPosition(1.0);
+                    nectarGate.setPosition(nectarGateClosed);
                     nectarGateBlocked = true;
                 }
             }
@@ -347,10 +352,10 @@ public class Match3LimeLightTeleop extends LinearOpMode {
         }
         double rawRpm = pollenShooter.getVelocity() * 60 / 28;
         pollenFilteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - pollenFilteredShooterRpm);
-        telemetry.addData("RPMActual=", pollenFilteredShooterRpm);
+        telemetry.addData("pollenRPMActual=", pollenFilteredShooterRpm);
         rawRpm = nectarShooter.getVelocity() * 60 / 28;
         nectarFilteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - nectarFilteredShooterRpm);
-        telemetry.addData("RPMActual=", nectarFilteredShooterRpm);
+        telemetry.addData("nectarRPMActual=", nectarFilteredShooterRpm);
         telemetry.addData("Right Front Pwr=",frontRightDrive.getPower());
         telemetry.addData("Left Front Pwr=",frontRightDrive.getPower());
         telemetry.addData("Right Rear Pwr=",backRightDrive.getPower());
