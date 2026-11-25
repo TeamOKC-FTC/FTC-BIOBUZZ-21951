@@ -91,9 +91,9 @@ public class Match3LimeLightTeleopV2 extends LinearOpMode {
     private final double pollenGateOpen=0.6;
     private final double nectarGateClosed=0.35;
     private final double nectarGateOpen=0.5;
-    private final double flipperRightStowedPosition=0.65;
+    private final double flipperRightStowedPosition=0.75;
     private final double flipperRightOpenPosition=0.0;
-    private final double flipperLeftStowedPosition=0.7;
+    private final double flipperLeftStowedPosition=0.8;
     private final double flipperLeftOpenPosition=0.05;
 
 
@@ -153,10 +153,10 @@ public class Match3LimeLightTeleopV2 extends LinearOpMode {
         pollenGate.setPosition(pollenGateClosed);          // blocked
         nectarGate.setPosition(nectarGateClosed);          // blocked
 
-        pollenShooter.setVelocityPIDFCoefficients(450, 0, 0, 13.0);
+        pollenShooter.setVelocityPIDFCoefficients(350, 0, 0, 12.6);
         pollenShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         pollenShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        nectarShooter.setVelocityPIDFCoefficients(450, 0, 0, 12.53);
+        nectarShooter.setVelocityPIDFCoefficients(350, 0, 0, 12.6);
         nectarShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         nectarShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 

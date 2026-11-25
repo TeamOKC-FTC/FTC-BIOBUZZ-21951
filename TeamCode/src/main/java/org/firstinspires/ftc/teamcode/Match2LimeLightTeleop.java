@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
@@ -30,6 +32,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  */
 
 @TeleOp(name="Match2LimeLightTeleop", group="Linear OpMode")
+@Disabled
 public class Match2LimeLightTeleop extends LinearOpMode {
 
     // Declare OpMode members for hardware.

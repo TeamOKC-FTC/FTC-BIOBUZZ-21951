@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.hardware.limelightvision.LLResult;
 import com.qualcomm.hardware.limelightvision.LLResultTypes;
@@ -33,6 +35,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit
  */
 
 @Autonomous(name="Match2Start2Shoot3Auto", group="Linear OpMode", preselectTeleOp="Match2LimeLightTeleop")
+@Disabled
 public class Match2Start2Shoot3Auto extends LinearOpMode {
 
     // Declare OpMode members for hardware.

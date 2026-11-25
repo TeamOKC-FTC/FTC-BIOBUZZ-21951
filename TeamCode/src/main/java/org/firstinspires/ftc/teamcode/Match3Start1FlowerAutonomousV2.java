@@ -66,9 +66,9 @@ public class Match3Start1FlowerAutonomousV2 extends LinearOpMode {
     // Gate and flipper positions (same as Match3LimeLightTeleopV2)
     private final double pollenGateClosed=1.0;
     private final double pollenGateOpen=0.6;
-    private final double flipperRightStowedPosition=0.65;
+    private final double flipperRightStowedPosition=0.75;
     private final double flipperRightOpenPosition=0.0;
-    private final double flipperLeftStowedPosition=0.7;
+    private final double flipperLeftStowedPosition=0.8;
     private final double flipperLeftOpenPosition=0.05;
     private double pollenFilteredRPM = 0;
     private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
