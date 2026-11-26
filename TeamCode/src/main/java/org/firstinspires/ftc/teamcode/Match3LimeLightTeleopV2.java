@@ -58,10 +58,10 @@ public class Match3LimeLightTeleopV2 extends LinearOpMode {
     //   RPM = RPMGain * RPMSlope * distance(inches) + RPMOffset
     // The gamepad2 dpad adjusts the gain (1.0 = use the slope as-is).
     private double pollenShooterRPMSlope = 3.3;
-    private double pollenShooterRPMOffset = 2400;  //match 2 data was 2366
+    private double pollenShooterRPMOffset = 2511.3;  // 2640 RPM at 39 in (was 2400, match 2 data was 2366)
     private double pollenShooterRPMGain = 1.0;
     private double nectarShooterRPMSlope = 3.3;
-    private double nectarShooterRPMOffset = 2400;
+    private double nectarShooterRPMOffset = 2441.3;  // 2570 RPM at 39 in (was 2400)
     private double nectarShooterRPMGain = 1.0;
     private static final double SHOOTER_RPM_GAIN_STEP = 0.1; // rpm slope gain change per dpad press about 10rpm per press
     private static final double SHOOTER_RPM_MAX_DISTANCE_INCHES = 65.0; // distance used in RPM calculation is limited to this

@@ -52,7 +52,7 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
     // Shooter RPM scales with distance to goal (same as Match3LimeLightTeleopV2):
     //   RPM = RPMGain * RPMSlope * distance(inches) + RPMOffset
     private double pollenShooterRPMSlope = 3.3;
-    private double pollenShooterRPMOffset = 2400;  //match 2 data was 2366
+    private double pollenShooterRPMOffset = 2511.3;  // 2640 RPM at 39 in (was 2400, match 2 data was 2366)
     private double pollenShooterRPMGain = 1.0; // fixed in auto (no dpad adjustment)
     private static final double SHOOTER_RPM_MAX_DISTANCE_INCHES = 65.0; // distance used in RPM calculation is limited to this
     private int pollenShooterSpeed = 2366 * 28 / 60; // RPM converted to ticks/sec (recomputed every loop from distance)
@@ -102,17 +102,17 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
 
     // Heading correction tuning
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
-    private static final double MAX_TURN_POWER = 0.4;  // correction power ceiling
+    private static final double MAX_TURN_POWER = 0.6;  // correction power ceiling (was 0.4, large turns were slow)
     private static final double HEADING_KP = 1.43;     // tuned so ~10 deg error yields ~0.25 power
 
     // Axial (forward/back) control tuning for moveToWaypoint.
     private static final double AXIAL_KP = 0.027;          // power per inch of forward/back error
-    private static final double AXIAL_MIN_POWER = 0.12;    // floor so the last few inches don't crawl
+    private static final double AXIAL_MIN_POWER = 0.15;    // floor so the last few inches don't crawl (was 0.12)
     private static final double AXIAL_MAX_POWER = 0.6;     // power ceiling
 
     // Strafe (left/right) control tuning for moveToWaypoint.
     private static final double STRAFE_KP = 0.035;         // power per inch of left/right error
-    private static final double STRAFE_MIN_POWER = 0.16;   // floor so the last few inches don't crawl
+    private static final double STRAFE_MIN_POWER = 0.22;   // floor so the last few inches don't crawl (was 0.16, stalled strafes)
     private static final double STRAFE_MAX_POWER = 0.6;    // power ceiling
 
     // Move tolerances
@@ -343,13 +343,16 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
         }
     }
 
-    private double computeHeadingCorrectionPower(double headingErrorRad, double zeroPowerBandDegrees) {
+    private double computeHeadingCorrectionPower(double headingErrorRad, double zeroPowerBandDegrees, boolean robotMoving) {
         if (Math.abs(Math.toDegrees(headingErrorRad)) < zeroPowerBandDegrees) {
             return 0.0;
         }
         double rawYaw = headingErrorRad * HEADING_KP;
         rawYaw = Math.max(-MAX_TURN_POWER, Math.min(MAX_TURN_POWER, rawYaw));
-        if (Math.abs(rawYaw) < MIN_TURN_POWER) {
+        // The MIN_TURN_POWER floor is only needed to break static friction when the robot is stopped.
+        // While the robot is already moving, use plain proportional power so small heading
+        // corrections during a strafe don't overshoot and wobble.
+        if (!robotMoving && Math.abs(rawYaw) < MIN_TURN_POWER) {
             rawYaw = Math.signum(headingErrorRad) * MIN_TURN_POWER;
         }
         return rawYaw;
@@ -411,14 +414,17 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
 
         boolean timedOut = (nowMs - moveStartTimeMs) >= timeoutMs;
 
+        // Robot velocity, used for the full-stop check and for the turn power floor.
+        double velX = pinpoint.getVelX(DistanceUnit.INCH);
+        double velY = pinpoint.getVelY(DistanceUnit.INCH);
+        double speedInchesPerSec = Math.hypot(velX, velY);
+        double angularVelDegPerSec = Math.abs(pinpoint.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
+        boolean robotStopped = speedInchesPerSec < STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC
+                && angularVelDegPerSec < STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC;
+
         boolean velocityOk = true;
         if (requireFullStop) {
-            double velX = pinpoint.getVelX(DistanceUnit.INCH);
-            double velY = pinpoint.getVelY(DistanceUnit.INCH);
-            double speedInchesPerSec = Math.hypot(velX, velY);
-            double angularVelDegPerSec = Math.abs(pinpoint.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
-            velocityOk = speedInchesPerSec < STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC
-                    && angularVelDegPerSec < STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC;
+            velocityOk = robotStopped;
         }
 
         boolean toleranceMet = positionOk && headingOk && velocityOk;
@@ -458,7 +464,7 @@ public class Match3Start2FlowerAutonomousV2 extends LinearOpMode {
             axialPower  /= scale;
             strafePower /= scale;
         }
-        double yawPower = computeHeadingCorrectionPower(headingErrorRad, headingZeroBand);
+        double yawPower = computeHeadingCorrectionPower(headingErrorRad, headingZeroBand, !robotStopped);
 
         double frontLeftPower = axialPower - strafePower - yawPower;
         double frontRightPower = axialPower + strafePower + yawPower;

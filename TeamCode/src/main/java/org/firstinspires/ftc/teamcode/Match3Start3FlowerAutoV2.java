@@ -61,7 +61,7 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
     // Shooter RPM scales with distance to goal (same as Match3LimeLightTeleopV2):
     //   RPM = RPMGain * RPMSlope * distance(inches) + RPMOffset
     private double pollenShooterRPMSlope = 3.3;
-    private double pollenShooterRPMOffset = 2400;  //match 2 data was 2366
+    private double pollenShooterRPMOffset = 2511.3;  // 2640 RPM at 39 in (was 2400, match 2 data was 2366)
     private double pollenShooterRPMGain = 1.0; // fixed in auto (no dpad adjustment)
     private static final double SHOOTER_RPM_MAX_DISTANCE_INCHES = 65.0; // distance used in RPM calculation is limited to this
     private int pollenShooterSpeed = 2366 * 28 / 60; // RPM converted to ticks/sec (recomputed every loop from distance)
@@ -79,7 +79,7 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
     private final double flipperRightOpenPosition=0.0;
     private final double flipperLeftStowedPosition=0.8;
     private final double flipperLeftOpenPosition=0.05;
-    private double pollenFilteredShooterRPM = 0;
+    private double pollenFilteredRPM = 0;
     private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
 
     // Pinpoint Pod Offsets (in Inches)
@@ -126,17 +126,17 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
 
     // Heading correction tuning
     private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
-    private static final double MAX_TURN_POWER = 0.4;  // correction power ceiling
+    private static final double MAX_TURN_POWER = 0.6;  // correction power ceiling (was 0.4, large turns were slow)
     private static final double HEADING_KP = 1.43;     // tuned so ~10 deg error yields ~0.25 power
 
     // Axial (forward/back) control tuning for moveToWaypoint.
     private static final double AXIAL_KP = 0.027;          // power per inch of forward/back error
-    private static final double AXIAL_MIN_POWER = 0.12;    // floor so the last few inches don't crawl
+    private static final double AXIAL_MIN_POWER = 0.15;    // floor so the last few inches don't crawl (was 0.12)
     private static final double AXIAL_MAX_POWER = 0.6;     // power ceiling
 
     // Strafe (left/right) control tuning for moveToWaypoint.
     private static final double STRAFE_KP = 0.035;         // power per inch of left/right error
-    private static final double STRAFE_MIN_POWER = 0.16;   // floor so the last few inches don't crawl
+    private static final double STRAFE_MIN_POWER = 0.22;   // floor so the last few inches don't crawl (was 0.16, stalled strafes)
     private static final double STRAFE_MAX_POWER = 0.6;    // power ceiling
 
     // Move tolerances
@@ -144,8 +144,8 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
     private static final double HEADING_TOLERANCE_DEGREES = 2.0;
     private static final double PRECISE_POSITION_TOLERANCE_INCHES = 1.0;
     private static final double PRECISE_HEADING_TOLERANCE_DEGREES = 1.5;
-    private static final double APPROACH_POSITION_TOLERANCE_INCHES = 3.0; // pass-through staging point, no full stop
-    private static final double APPROACH_HEADING_TOLERANCE_DEGREES = 5.0; // pass-through staging point, no full stop
+    private static final double PASS_THROUGH_POSITION_TOLERANCE_INCHES = 3.0; // pass-through waypoint, no full stop
+    private static final double PASS_THROUGH_HEADING_TOLERANCE_DEGREES = 5.0; // pass-through waypoint, no full stop
 
     // Zero-power bands
     private static final double ZERO_POWER_BAND_FRACTION = 0.5;
@@ -401,7 +401,7 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
         telemetry.addData("Auto Step", autoStep);
         telemetry.addData("Hive Tags Seen", hiveTagCount);
         telemetry.addData("RPMcommand=", pollenShooterSpeed * 60 / 28);
-        telemetry.addData("RPMActual=", pollenFilteredShooterRPM);
+        telemetry.addData("RPMActual=", pollenFilteredRPM);
         telemetry.update();
     }
 
@@ -415,13 +415,16 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
         }
     }
 
-    private double computeHeadingCorrectionPower(double headingErrorRad, double zeroPowerBandDegrees) {
+    private double computeHeadingCorrectionPower(double headingErrorRad, double zeroPowerBandDegrees, boolean robotMoving) {
         if (Math.abs(Math.toDegrees(headingErrorRad)) < zeroPowerBandDegrees) {
             return 0.0;
         }
         double rawYaw = headingErrorRad * HEADING_KP;
         rawYaw = Math.max(-MAX_TURN_POWER, Math.min(MAX_TURN_POWER, rawYaw));
-        if (Math.abs(rawYaw) < MIN_TURN_POWER) {
+        // The MIN_TURN_POWER floor is only needed to break static friction when the robot is stopped.
+        // While the robot is already moving, use plain proportional power so small heading
+        // corrections during a strafe don't overshoot and wobble.
+        if (!robotMoving && Math.abs(rawYaw) < MIN_TURN_POWER) {
             rawYaw = Math.signum(headingErrorRad) * MIN_TURN_POWER;
         }
         return rawYaw;
@@ -483,14 +486,17 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
 
         boolean timedOut = (nowMs - moveStartTimeMs) >= timeoutMs;
 
+        // Robot velocity, used for the full-stop check and for the turn power floor.
+        double velX = pinpoint.getVelX(DistanceUnit.INCH);
+        double velY = pinpoint.getVelY(DistanceUnit.INCH);
+        double speedInchesPerSec = Math.hypot(velX, velY);
+        double angularVelDegPerSec = Math.abs(pinpoint.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
+        boolean robotStopped = speedInchesPerSec < STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC
+                && angularVelDegPerSec < STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC;
+
         boolean velocityOk = true;
         if (requireFullStop) {
-            double velX = pinpoint.getVelX(DistanceUnit.INCH);
-            double velY = pinpoint.getVelY(DistanceUnit.INCH);
-            double speedInchesPerSec = Math.hypot(velX, velY);
-            double angularVelDegPerSec = Math.abs(pinpoint.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
-            velocityOk = speedInchesPerSec < STOP_VELOCITY_THRESHOLD_INCHES_PER_SEC
-                    && angularVelDegPerSec < STOP_ANGULAR_VELOCITY_THRESHOLD_DEG_PER_SEC;
+            velocityOk = robotStopped;
         }
 
         boolean toleranceMet = positionOk && headingOk && velocityOk;
@@ -530,7 +536,7 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
             axialPower  /= scale;
             strafePower /= scale;
         }
-        double yawPower = computeHeadingCorrectionPower(headingErrorRad, headingZeroBand);
+        double yawPower = computeHeadingCorrectionPower(headingErrorRad, headingZeroBand, !robotStopped);
 
         double frontLeftPower = axialPower - strafePower - yawPower;
         double frontRightPower = axialPower + strafePower + yawPower;
@@ -558,13 +564,13 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
 
     private void updateShooterRpmFilter() {
         double rawRpm = pollenShooter.getVelocity() * 60.0 / 28.0;
-        pollenFilteredShooterRPM += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - pollenFilteredShooterRPM);
+        pollenFilteredRPM += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - pollenFilteredRPM);
     }
 
     private boolean RPM_OK() {
         double commandedRpm = pollenShooterSpeed * 60.0 / 28.0;
         double tolerance = Math.max(commandedRpm * RPM_TOLERANCE_PERCENT, RPM_TOLERANCE_MIN_FLOOR);
-        boolean inBand = Math.abs(pollenFilteredShooterRPM - commandedRpm) < tolerance;
+        boolean inBand = Math.abs(pollenFilteredRPM - commandedRpm) < tolerance;
 
         double nowMs = runtime.milliseconds();
         if (inBand) {
@@ -646,7 +652,7 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
             case 22:
                 // Line up just short of the flower. Pass-through point: no full stop and a looser
                 // tolerance so the robot carries straight into the drive into the flower (step 23).
-                if (moveToWaypoint(activeFlowerHeadingDegrees, flowerXInches, flowerYInches - FLOWER_APPROACH_OFFSET_INCHES, 5000, false, APPROACH_POSITION_TOLERANCE_INCHES, APPROACH_HEADING_TOLERANCE_DEGREES)) {
+                if (moveToWaypoint(activeFlowerHeadingDegrees, flowerXInches, flowerYInches - FLOWER_APPROACH_OFFSET_INCHES, 5000, false, PASS_THROUGH_POSITION_TOLERANCE_INCHES, PASS_THROUGH_HEADING_TOLERANCE_DEGREES)) {
                     advanceStep();
                 }
                 if (elapsedInStep >= 7000.0) {
@@ -671,7 +677,7 @@ public class Match3Start3FlowerAutoV2 extends LinearOpMode {
                 if (elapsedInStep >= FLOWER_FLIP_CYCLES * FLOWER_FLIP_CYCLE_MS) {
                     advanceStep();
                 } else if ((elapsedInStep % FLOWER_FLIP_CYCLE_MS) < FLOWER_FLIP_CYCLE_MS / 2.0) {
-                    rightFlipper.setPosition(flipperRightStowedPosition); // stow
+                    rightFlipper.setPosition((flipperRightStowedPosition+flipperRightOpenPosition)/2); // stow
                 } else {
                     rightFlipper.setPosition(flipperRightOpenPosition); // open
                 }
