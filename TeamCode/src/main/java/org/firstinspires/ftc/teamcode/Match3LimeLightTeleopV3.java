@@ -108,9 +108,9 @@ public class Match3LimeLightTeleopV3 extends LinearOpMode {
     //   STOWED:    uppermost. Start position and backwall shooting position. Interferes with a running intake.
     //   RUNNING:   middle. Normal position when driving around, required when running the intake.
     //   GATHERING: lowest. Used for retrieving pollen from a flower.
-    private final double flowerBarStowedPosition=0.5;
-    private final double flowerBarRunningPosition=0.5;
-    private final double flowerBarGatheringPosition=0.5;
+    private final double flowerBarStowedPosition=0.0;
+    private final double flowerBarRunningPosition=0.21;
+    private final double flowerBarGatheringPosition=0.58;
     private static final int FLOWER_BAR_STOWED = 0;
     private static final int FLOWER_BAR_RUNNING = 1;
     private static final int FLOWER_BAR_GATHERING = 2;

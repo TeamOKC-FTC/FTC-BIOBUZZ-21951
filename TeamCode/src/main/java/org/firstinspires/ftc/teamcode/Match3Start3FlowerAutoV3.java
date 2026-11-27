@@ -88,9 +88,9 @@ public class Match3Start3FlowerAutoV3 extends LinearOpMode {
     //   STOWED:    uppermost. Start position and backwall shooting position. Interferes with a running intake.
     //   RUNNING:   middle. Normal position when driving around, required when running the intake.
     //   GATHERING: lowest. Used for retrieving pollen from a flower.
-    private final double flowerBarStowedPosition=0.5;
-    private final double flowerBarRunningPosition=0.5;
-    private final double flowerBarGatheringPosition=0.5;
+    private final double flowerBarStowedPosition=0.0;
+    private final double flowerBarRunningPosition=0.21;
+    private final double flowerBarGatheringPosition=0.58;
     private double pollenFilteredRPM = 0;
     private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
 
