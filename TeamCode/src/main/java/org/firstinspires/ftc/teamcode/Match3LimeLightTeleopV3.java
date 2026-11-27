@@ -1,0 +1,740 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.util.ElapsedTime;
+
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.robotcore.external.navigation.UnnormalizedAngleUnit;
+
+/*
+ * Match3LimeLightTeleopV3
+ * --------------------------------------------------------------------------------
+ * Single unified TeleOp OpMode for Match 3 with Limelight 3D Auto-Aiming.
+ *
+ * B-BUTTON AUTO-AIM:
+ *   - Primary: Uses Limelight 3D pose (llResult.getBotpose()) to align heading
+ *   - Fallback: If no valid Limelight target is seen, seamlessly falls back to
+ *               Pinpoint field odometry calculation.
+ *
+ * FLOWER BAR (V3 robot, servo "flowerBar"):
+ *   - gamepad2 left bumper:  toggle STOWED <-> RUNNING
+ *   - gamepad2 right bumper: toggle RUNNING <-> GATHERING
+ *   - Starts STOWED. The driver manages it: STOWED interferes with a running intake.
+ * --------------------------------------------------------------------------------
+ */
+
+@TeleOp(name="Match3LimeLightTeleopV3", group="Linear OpMode")
+public class Match3LimeLightTeleopV3 extends LinearOpMode {
+
+    // Declare OpMode members for hardware.
+    private ElapsedTime runtime = new ElapsedTime();
+    private DcMotor frontLeftDrive = null;
+    private DcMotor backLeftDrive = null;
+    private DcMotor frontRightDrive = null;
+    private DcMotor backRightDrive = null;
+    private DcMotor intake         = null;
+    private DcMotorEx pollenShooter      = null;
+    private DcMotorEx nectarShooter      = null;
+    private Servo     rightFlipper = null;
+    private Servo     leftFlipper  = null;
+    private Servo     pollenGate         = null;
+    private Servo     nectarGate         = null;
+    private Servo     flowerBar          = null;
+
+
+    // goBILDA Pinpoint Odometry Computer & Limelight 3A
+    private GoBildaPinpointDriver pinpoint = null;
+    private Limelight3A limelight = null;
+    private String allianceColor = "NONE"; // "RED", "BLUE", or "NONE"
+    private boolean allianceFromAuto = false; // true if the alliance color was loaded from Autonomous (even if "NONE")
+
+    // Shooter RPM scales with distance to goal:
+    //   RPM = RPMGain * RPMSlope * distance(inches) + RPMOffset
+    // The gamepad2 dpad adjusts the gain (1.0 = use the slope as-is).
+    private double pollenShooterRPMSlope = 3.3;
+    private double pollenShooterRPMOffset = 2511.3;  // 2640 RPM at 39 in (was 2400, match 2 data was 2366)
+    private double pollenShooterRPMGain = 1.0;
+    private double nectarShooterRPMSlope = 3.3;
+    private double nectarShooterRPMOffset = 2441.3;  // 2570 RPM at 39 in (was 2400)
+    private double nectarShooterRPMGain = 1.0;
+    private static final double SHOOTER_RPM_GAIN_STEP = 0.1; // rpm slope gain change per dpad press about 10rpm per press
+    private static final double SHOOTER_RPM_MAX_DISTANCE_INCHES = 65.0; // distance used in RPM calculation is limited to this
+
+    private int pollenShooterSpeed = 2366 * 28 / 60; // RPM converted to ticks/sec (recomputed every loop from distance)
+    private int nectarShooterSpeed = 2366 * 28 / 60; // RPM converted to ticks/sec (recomputed every loop from distance)
+    private boolean shooteron = false;
+    private double nectarFilteredShooterRpm = 0;
+    private double pollenFilteredShooterRpm = 0;
+    private static final double SHOOTER_RPM_FILTER_ALPHA = 0.15; // lower = smoother/slower to settle
+    private boolean flipperleftstowed = true;
+    private boolean flipperrightstowed = true;
+    private boolean pollenGateBlocked = true;
+    private boolean nectarGateBlocked = true;
+
+    // Button Indices
+    private final int BTN_DPAD_UP = 0;
+    private final int BTN_DPAD_DOWN = 1;
+    private final int BTN_DPAD_RIGHT = 2;
+    private final int BTN_DPAD_LEFT = 3;
+    private final int BTN_Y = 4;
+    private final int BTN_RIGHT_BUMPER = 5;
+    private final int BTN_LEFT_BUMPER = 6;
+    private final int BTN_X = 7;
+    private final int BTN_B = 8;
+    private final int BTN_G2_LEFT_BUMPER = 9;
+    private final int BTN_G2_RIGHT_BUMPER = 10;
+    private final double pollenGateClosed=1.0;
+    private final double pollenGateOpen=0.6;
+    private final double nectarGateClosed=0.35;
+    private final double nectarGateOpen=0.5;
+    private final double flipperRightStowedPosition=0.75;
+    private final double flipperRightOpenPosition=0.0;
+    private final double flipperLeftStowedPosition=0.8;
+    private final double flipperLeftOpenPosition=0.05;
+
+    // Flower bar positions - TUNE with Match3FlowerBarTunerV3 (0.5 = placeholder)
+    //   STOWED:    uppermost. Start position and backwall shooting position. Interferes with a running intake.
+    //   RUNNING:   middle. Normal position when driving around, required when running the intake.
+    //   GATHERING: lowest. Used for retrieving pollen from a flower.
+    private final double flowerBarStowedPosition=0.5;
+    private final double flowerBarRunningPosition=0.5;
+    private final double flowerBarGatheringPosition=0.5;
+    private static final int FLOWER_BAR_STOWED = 0;
+    private static final int FLOWER_BAR_RUNNING = 1;
+    private static final int FLOWER_BAR_GATHERING = 2;
+    private int flowerBarState = FLOWER_BAR_STOWED;
+
+    private final double[] buttonLastPressTime = new double[11];
+    private final boolean[] buttonLastState = new boolean[11];
+
+    // Pinpoint Pod Offsets (in Inches)
+    private double xPodOffsetInches = -3.600; // X pod offset + is left sideways from robot center (-84 mm)
+    private double yPodOffsetInches = -(17.0/2.0-2.0); // Y pod offset + is forward from robot center (-168 mm)
+
+    private double laucherToRobotCenterX=-9.0;
+    private double laucherToRobotCenterY=0.0;  //was -4.0 on match2 robot
+
+    private double targetHeading = 0.0;
+    private double targetDistanceInches = 0.0; // Global target distance to hive opening (in inches)
+    private double goalHeading = 0.0; // Pinpoint-calculated heading to aim the launcher at the goal (radians), updated every loop
+    private boolean rightStickWasActive = false; // tracks deadzone state last loop, to detect the release edge
+    private boolean limelightAimLocked = false; // true once a steady Limelight aim was taken during the current B press
+    private String aimMethod = "OFF"; // which data the B-aim used this loop: OFF, PINPOINT, TAGS, or TAGS HELD (shown in telemetry)
+    private static final double LIMELIGHT_MAX_TURN_RATE_DEG_PER_SEC = 20.0; // only trust Limelight when turning slower than this (motion blur)
+    // Heading correction tuning.
+    private static final double MIN_TURN_POWER = 0.17; // measured minimum power to overcome drivetrain static friction
+    private static final double MAX_TURN_POWER = 0.4;  // base correction power ceiling, reached by ~16 deg error
+    private static final double HEADING_KP = 1.43;     // tuned so ~10 deg error yields ~0.25 power at base aggression
+    private static final double HEADING_TOLERANCE_DEGREES = 2.0; // stop correcting once within this residual error
+    private static final double MAX_TURN_AGGRESSION = 1.5; // pushing the stick to full deflection scales gain/ceiling up to this factor (reaches full motor power)
+    private static final double B_AIM_STICK_EQUIVALENT = 0.75; // while B is held, turn as hard as the right stick pushed this far
+
+    @Override
+    public void runOpMode() {
+
+        // Initialize the hardware variables.
+        frontRightDrive = hardwareMap.get(DcMotor.class, "rightFront"); //port 0
+        frontLeftDrive = hardwareMap.get(DcMotor.class, "leftFront"); //port 1
+        backRightDrive = hardwareMap.get(DcMotor.class, "rightRear"); //port 2
+        backLeftDrive = hardwareMap.get(DcMotor.class, "leftRear");  //port 3
+        intake = hardwareMap.get(DcMotor.class, "intake");   //exp hub port 0
+        pollenShooter = hardwareMap.get(DcMotorEx.class, "pollenShooter");  //exp hub port 1
+        nectarShooter = hardwareMap.get(DcMotorEx.class, "nectarShooter");
+        rightFlipper = hardwareMap.get(Servo.class, "rightFlipper");  //exp hub port 0
+        leftFlipper = hardwareMap.get(Servo.class, "leftFlipper");  //exp hub port 1
+        pollenGate = hardwareMap.get(Servo.class, "pollenGate");  //exp hub port 2
+        nectarGate = hardwareMap.get(Servo.class, "nectarGate");
+        flowerBar = hardwareMap.get(Servo.class, "flowerBar");
+
+        frontLeftDrive.setDirection(DcMotor.Direction.REVERSE);
+        backLeftDrive.setDirection(DcMotor.Direction.REVERSE);
+        frontRightDrive.setDirection(DcMotor.Direction.FORWARD);
+        backRightDrive.setDirection(DcMotor.Direction.FORWARD);
+        intake.setDirection(DcMotor.Direction.FORWARD);
+        pollenShooter.setDirection(DcMotorEx.Direction.REVERSE);
+        nectarShooter.setDirection(DcMotorEx.Direction.FORWARD);
+        rightFlipper.setDirection(Servo.Direction.FORWARD);
+        leftFlipper.setDirection(Servo.Direction.REVERSE);
+        pollenGate.setDirection(Servo.Direction.FORWARD);
+        nectarGate.setDirection(Servo.Direction.FORWARD);
+
+        pollenGate.setPosition(pollenGateClosed);          // blocked
+        nectarGate.setPosition(nectarGateClosed);          // blocked
+        flowerBar.setPosition(flowerBarStowedPosition);    // stowed is always the starting position
+        flowerBarState = FLOWER_BAR_STOWED;
+
+        pollenShooter.setVelocityPIDFCoefficients(350, 0, 0, 12.6);
+        pollenShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        pollenShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        nectarShooter.setVelocityPIDFCoefficients(350, 0, 0, 12.6);
+        nectarShooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        nectarShooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+        frontLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backLeftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        frontRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        backRightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+
+        // Initialize Limelight 3A (Pipeline 0 sees all tags, used to detect alliance color)
+        try {
+            limelight = hardwareMap.get(Limelight3A.class, "limelight");
+            limelight.pipelineSwitch(0);
+            limelight.start();
+        } catch (Exception e) {
+            telemetry.addData("Limelight Warning", "Limelight hardware not found: " + e.getMessage());
+        }
+
+        // Retrieve saved end-of-autonomous pose from PoseStorage or default to Start 1 position
+        Pose2D startPose;
+        String initStatus;
+        if (PoseStorage.hasValidPose) {
+            startPose = PoseStorage.currentPose;
+            // Use Autonomous' alliance color. If it is "NONE" the camera will not be used.
+            allianceColor = PoseStorage.allianceColor;
+            allianceFromAuto = true;
+            selectAlliancePipeline();
+            PoseStorage.hasValidPose = false; // Reset so next un-linked run defaults
+            initStatus = "Initialized - Loaded Pose from Autonomous";
+        } else {
+            // Default Start 1 Position (-9.5 in, -62.0 in, -90.0 deg)
+            startPose = new Pose2D(DistanceUnit.INCH, -9.5, -62.0, AngleUnit.DEGREES, -90.0);
+            initStatus = "Initialized - Using Default Start 1 Position";
+        }
+
+        targetHeading = startPose.getHeading(AngleUnit.RADIANS);
+
+        // Initialize goBILDA Pinpoint with starting pose
+        initPinpoint(xPodOffsetInches, yPodOffsetInches,
+                     startPose.getX(DistanceUnit.INCH),
+                     startPose.getY(DistanceUnit.INCH),
+                     startPose.getHeading(AngleUnit.DEGREES));
+
+        // Display repeating position telemetry during INIT phase until driver presses START
+        while (!isStarted() && !isStopRequested()) {
+            pinpoint.update();
+
+            // Keep goal heading and distance telemetry accurate during INIT
+            Pose2D initPose = pinpoint.getPosition();
+            goalHeading = calculateHeadingForLauncherAim(initPose.getX(DistanceUnit.INCH), initPose.getY(DistanceUnit.INCH), initPose.getHeading(AngleUnit.RADIANS));
+
+            // No alliance color from Autonomous - detect it here. Limelight data comes and goes
+            // during INIT, so keep the last color seen instead of resetting to "NONE" on a missed frame.
+            if (!allianceFromAuto) {
+                String seenAlliance = detectAllianceColor();
+                if (!seenAlliance.equals("NONE")) {
+                    allianceColor = seenAlliance;
+                }
+            }
+
+            updateTelemetry(initStatus);
+            sleep(20);
+        }
+
+        waitForStart();
+        runtime.reset();
+
+        // Alliance color is now final
+        if (allianceColor.equals("NONE")) {
+            // No good camera data - don't use the Limelight at all; B-aim uses Pinpoint only
+            if (limelight != null) {
+                limelight.stop();
+                limelight = null;
+            }
+        } else if (!allianceFromAuto) {
+            // Switch Limelight to only see our alliance's tags
+            selectAlliancePipeline();
+        }
+
+        // Run until the end of the match (driver presses STOP)
+        while (opModeIsActive()) {
+            // Drive the chassis using field-oriented controls
+            driveFieldOriented();
+
+            // Intake control
+            if (gamepad1.right_trigger > .2) {
+                intake.setPower(gamepad1.right_trigger);
+            } else {
+                intake.setPower(-gamepad1.left_trigger);
+            }
+
+            //If intake then on gate off.
+            if (Math.abs(intake.getPower())>.2){
+                pollenGate.setPosition(pollenGateClosed);
+                nectarGate.setPosition(nectarGateClosed);
+                pollenGateBlocked = true;  // keep gate toggles in sync with the closed gates
+                nectarGateBlocked = true;
+            }
+
+            // Shooter RPM gain adjustments (gain multiplies the RPM-vs-distance slope)
+            if (isPressed(gamepad2.dpad_up, BTN_DPAD_UP)) {
+                pollenShooterRPMGain = pollenShooterRPMGain + SHOOTER_RPM_GAIN_STEP;
+            }
+
+            if (isPressed(gamepad2.dpad_down, BTN_DPAD_DOWN)) {
+                pollenShooterRPMGain = pollenShooterRPMGain - SHOOTER_RPM_GAIN_STEP;
+            }
+
+            if (isPressed(gamepad2.dpad_right, BTN_DPAD_RIGHT)) {
+                nectarShooterRPMGain = nectarShooterRPMGain + SHOOTER_RPM_GAIN_STEP;
+            }
+
+            if (isPressed(gamepad2.dpad_left, BTN_DPAD_LEFT)) {
+                nectarShooterRPMGain = nectarShooterRPMGain - SHOOTER_RPM_GAIN_STEP;
+            }
+
+            // Shooter toggle
+            if (isPressed(gamepad2.y, BTN_Y)) {
+                shooteron = !shooteron;
+            }
+
+            // Recompute shooter speeds from distance to goal every loop
+            // Distance used for RPM is capped at SHOOTER_RPM_MAX_DISTANCE_INCHES
+            double rpmDistanceInches = Math.min(targetDistanceInches, SHOOTER_RPM_MAX_DISTANCE_INCHES);
+            double pollenShooterRPM = pollenShooterRPMGain * pollenShooterRPMSlope * rpmDistanceInches + pollenShooterRPMOffset;
+            double nectarShooterRPM = nectarShooterRPMGain * nectarShooterRPMSlope * rpmDistanceInches + nectarShooterRPMOffset;
+            pollenShooterSpeed = (int) (pollenShooterRPM * 28 / 60); // RPM converted to ticks/sec
+            nectarShooterSpeed = (int) (nectarShooterRPM * 28 / 60); // RPM converted to ticks/sec
+            if (shooteron) {
+                pollenShooter.setVelocity(pollenShooterSpeed);
+                nectarShooter.setVelocity(nectarShooterSpeed);
+            } else {
+                pollenShooter.setVelocity(0);
+                nectarShooter.setVelocity(0);
+            }
+
+            // Flippers toggle
+            if (isPressed(gamepad1.right_bumper, BTN_RIGHT_BUMPER)) {
+                if (flipperrightstowed) {
+                    rightFlipper.setPosition(flipperRightOpenPosition);
+                    flipperrightstowed = false;
+                } else {
+                    rightFlipper.setPosition(flipperRightStowedPosition);
+                    flipperrightstowed = true;
+                }
+            }
+
+            if (isPressed(gamepad1.left_bumper, BTN_LEFT_BUMPER)) {
+                if (flipperleftstowed) {
+                    leftFlipper.setPosition(flipperLeftOpenPosition);
+                    flipperleftstowed = false;
+                } else {
+                    leftFlipper.setPosition(flipperLeftStowedPosition);
+                    flipperleftstowed = true;
+                }
+            }
+
+            // Flower bar toggles (driver manages the bar - the intake does not move it)
+            // gamepad2 left bumper:  stowed <-> running (from gathering, goes to running)
+            if (isPressed(gamepad2.left_bumper, BTN_G2_LEFT_BUMPER)) {
+                if (flowerBarState == FLOWER_BAR_STOWED) {
+                    setFlowerBar(FLOWER_BAR_RUNNING);
+                } else if (flowerBarState == FLOWER_BAR_RUNNING) {
+                    setFlowerBar(FLOWER_BAR_STOWED);
+                } else {
+                    setFlowerBar(FLOWER_BAR_RUNNING);
+                }
+            }
+            // gamepad2 right bumper: running <-> gathering (from stowed, goes to gathering)
+            if (isPressed(gamepad2.right_bumper, BTN_G2_RIGHT_BUMPER)) {
+                if (flowerBarState == FLOWER_BAR_GATHERING) {
+                    setFlowerBar(FLOWER_BAR_RUNNING);
+                } else {
+                    setFlowerBar(FLOWER_BAR_GATHERING);
+                }
+            }
+
+            // Gate toggle
+            if (isPressed(gamepad2.x, BTN_X)) {
+                if (pollenGateBlocked) {
+                    pollenGate.setPosition(pollenGateOpen);
+                    pollenGateBlocked = false;
+                } else {
+                    pollenGate.setPosition(pollenGateClosed);
+                    pollenGateBlocked = true;
+                }
+            }
+            // Gate toggle
+            if (isPressed(gamepad2.b, BTN_B)) {
+                if (nectarGateBlocked) {
+                    nectarGate.setPosition(nectarGateOpen);
+                    nectarGateBlocked = false;
+                } else {
+                    nectarGate.setPosition(nectarGateClosed);
+                    nectarGateBlocked = true;
+                }
+            }
+
+            // Telemetry feedback
+            updateTelemetry("Running");
+        }
+    }
+
+    /**
+     * Updates telemetry data for Pinpoint pose, target heading, shooter speed, and status.
+     * @param status Current status message
+     */
+    private void updateTelemetry(String status) {
+        Pose2D pose = pinpoint.getPosition();
+        telemetry.addData("Status", status);
+        telemetry.addData("Alliance", allianceColor + (allianceFromAuto ? " (from Auto)" : ""));
+        telemetry.addData("X (in)", pose.getX(DistanceUnit.INCH));
+        telemetry.addData("Y (in)", pose.getY(DistanceUnit.INCH));
+        telemetry.addData("Heading (deg)", pose.getHeading(AngleUnit.DEGREES));
+        telemetry.addData("Target Heading (deg)", Math.toDegrees(targetHeading));
+        telemetry.addData("Aim Method", aimMethod);
+        telemetry.addData("Target Distance (in)", "%.1f", targetDistanceInches);
+        telemetry.addData("Goal Heading (deg)", "%.1f", Math.toDegrees(goalHeading));
+        telemetry.addData("Heading (rad)", pose.getHeading(AngleUnit.RADIANS));
+        telemetry.addData("Flower Bar", flowerBarStateName());
+
+        // Limelight status telemetry
+        if (limelight != null) {
+            LLResult llResult = limelight.getLatestResult();
+            if (llResult != null && llResult.isValid()) {
+                telemetry.addData("Limelight Target", "LOCKED (" + llResult.getBotposeTagCount() + " tags)");
+            } else {
+                telemetry.addData("Limelight Target", "Searching...");
+            }
+        }
+
+        if (shooteron) {
+            telemetry.addData("pollenRPMcommand=", pollenShooterSpeed * 60 / 28);
+            telemetry.addData("nectarRPMcommand=", nectarShooterSpeed * 60 / 28);
+        } else {
+            telemetry.addData("pollenRPMcommand=", 0);
+            telemetry.addData("nectarRPMcommand=", 0);
+        }
+        telemetry.addData("pollenRPMGain=", "%.2f", pollenShooterRPMGain);
+        telemetry.addData("nectarRPMGain=", "%.2f", nectarShooterRPMGain);
+        double rawRpm = pollenShooter.getVelocity() * 60 / 28;
+        pollenFilteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - pollenFilteredShooterRpm);
+        telemetry.addData("pollenRPMActual=", pollenFilteredShooterRpm);
+        rawRpm = nectarShooter.getVelocity() * 60 / 28;
+        nectarFilteredShooterRpm += SHOOTER_RPM_FILTER_ALPHA * (rawRpm - nectarFilteredShooterRpm);
+        telemetry.addData("nectarRPMActual=", nectarFilteredShooterRpm);
+        telemetry.addData("Right Front Pwr=",frontRightDrive.getPower());
+        telemetry.addData("Left Front Pwr=",frontLeftDrive.getPower());
+        telemetry.addData("Right Rear Pwr=",backRightDrive.getPower());
+        telemetry.addData("Left Rear Pwr=",backLeftDrive.getPower());
+
+        telemetry.update();
+    }
+
+    /**
+     * Handles field-oriented driving calculations and updates chassis motor powers.
+     */
+    private void driveFieldOriented() {
+        // Update Pinpoint odometer & IMU readings
+        pinpoint.update();
+        Pose2D pose = pinpoint.getPosition();
+        double robotHeading = pose.getHeading(AngleUnit.RADIANS);
+
+        // Always calculate heading and distance to the goal from Pinpoint odometry so the shooter
+        // RPM tracks distance all the time. The heading is only used for steering while B is held.
+        goalHeading = calculateHeadingForLauncherAim(pose.getX(DistanceUnit.INCH), pose.getY(DistanceUnit.INCH), robotHeading);
+
+        // Left stick field-oriented requests
+        double fieldForward = -gamepad1.left_stick_y; // +1 = Move in +X field direction (away from driver)
+        double fieldLeft = -gamepad1.left_stick_x;    // +1 = Move in +Y field direction (to driver's left)
+
+        // Convert field movement (+X, +Y) to robot-relative frame (axial, strafe)
+        double robotAxial = fieldForward * Math.cos(robotHeading) + fieldLeft * Math.sin(robotHeading);
+        double robotStrafeLeft = -fieldForward * Math.sin(robotHeading) + fieldLeft * Math.cos(robotHeading);
+
+        // Right stick sets absolute target heading (UP = 0 rad, LEFT = +PI/2, DOWN = PI, RIGHT = -PI/2)
+        double rightStickX = gamepad1.right_stick_x;
+        double rightStickY = -gamepad1.right_stick_y; // +1 = UP
+        double rightStickMag = Math.hypot(rightStickX, rightStickY);
+
+        boolean rightStickActive = rightStickMag > 0.2; // Deadzone check
+
+        if (gamepad1.b) {
+            // Only read the Limelight when the robot is turning slowly - images taken while rotating
+            // are blurred and give bad aim data, which made the robot oscillate.
+            double turnRateDegPerSec = Math.abs(pinpoint.getHeadingVelocity(UnnormalizedAngleUnit.DEGREES));
+            double limelightHeading = Double.NaN;
+            if (turnRateDegPerSec < LIMELIGHT_MAX_TURN_RATE_DEG_PER_SEC) {
+                // Limelight 3D auto-aim (requires at least 3 fiducials found)
+                limelightHeading = calculateHeadingFromLimelight(robotHeading);
+            }
+
+            if (!Double.isNaN(limelightHeading)) {
+                targetHeading = limelightHeading;
+                limelightAimLocked = true;
+                aimMethod = "TAGS";
+            } else if (!limelightAimLocked) {
+                // No steady Limelight reading yet this press - use Pinpoint odometry calculation
+                targetHeading = goalHeading;
+                aimMethod = "PINPOINT";
+            } else {
+                // Otherwise keep the last steady Limelight target (held via Pinpoint heading) while turning
+                aimMethod = "TAGS HELD";
+            }
+
+            rightStickActive = true;
+        } else if (rightStickActive) {
+            // Target angle: UP=0, LEFT=+PI/2, DOWN=PI, RIGHT=-PI/2
+            targetHeading = Math.atan2(-rightStickX, rightStickY);  //atan2(y,x) is java, but stick is rotated 90 from field coordinates
+        } else if (rightStickWasActive) {
+            // Stick was just released - hold wherever we are right now instead of continuing
+            // to chase whatever heading the stick last pointed at
+            targetHeading = robotHeading;
+        }
+        rightStickWasActive = rightStickActive;
+        if (!gamepad1.b) {
+            limelightAimLocked = false;
+            aimMethod = "OFF";
+        }
+
+        // Calculate heading error using up-to-date targetHeading
+        double headingError = AngleUnit.normalizeRadians(targetHeading - robotHeading);
+
+        double aggression = 1.0;
+        if (rightStickActive) {
+            double stickDeflection = gamepad1.b ? B_AIM_STICK_EQUIVALENT : rightStickMag;
+            double t = (stickDeflection - 0.2) / 0.8;
+            aggression = 1.0 + t * (MAX_TURN_AGGRESSION - 1.0);
+        }
+        double effectiveKp = HEADING_KP * aggression;
+        double effectiveMaxTurnPower = MAX_TURN_POWER * aggression;
+
+        double yaw;
+        if (Math.abs(Math.toDegrees(headingError)) < HEADING_TOLERANCE_DEGREES) {
+            yaw = 0;
+        } else {
+            double rawYaw = headingError * effectiveKp;
+            rawYaw = Math.max(-effectiveMaxTurnPower, Math.min(effectiveMaxTurnPower, rawYaw));
+            if (Math.abs(rawYaw) < MIN_TURN_POWER) {
+                rawYaw = Math.signum(headingError) * MIN_TURN_POWER;
+            }
+            yaw = rawYaw;
+        }
+
+        // Combine joystick requests for Mecanum wheel powers
+        double frontLeftPower = robotAxial - robotStrafeLeft - yaw;
+        double frontRightPower = robotAxial + robotStrafeLeft + yaw;
+        double backLeftPower = robotAxial + robotStrafeLeft - yaw;
+        double backRightPower = robotAxial - robotStrafeLeft + yaw;
+
+        // Normalize powers so no motor exceeds 100%
+        double max = Math.max(Math.abs(frontLeftPower), Math.abs(frontRightPower));
+        max = Math.max(max, Math.abs(backLeftPower));
+        max = Math.max(max, Math.abs(backRightPower));
+
+        if (max > 1.0) {
+            frontLeftPower /= max;
+            frontRightPower /= max;
+            backLeftPower /= max;
+            backRightPower /= max;
+        }
+
+        // Send power to drive motors
+        frontLeftDrive.setPower(frontLeftPower);
+        frontRightDrive.setPower(frontRightPower);
+        backLeftDrive.setPower(backLeftPower);
+        backRightDrive.setPower(backRightPower);
+    }
+
+    /**
+     * Initializes the goBILDA Pinpoint computer with pod offsets, directions, and initial pose.
+     * @param xPodOffsetInches X pod offset sideways from center (in inches)
+     * @param yPodOffsetInches Y pod offset forward/backward from center (in inches)
+     * @param startXInches Initial X coordinate in inches
+     * @param startYInches Initial Y coordinate in inches
+     * @param startHeadingDegrees Initial heading in degrees
+     */
+    private void initPinpoint(double xPodOffsetInches, double yPodOffsetInches, double startXInches, double startYInches, double startHeadingDegrees) {
+        pinpoint = hardwareMap.get(GoBildaPinpointDriver.class, "pinpoint");  //control hub ic2 port 1
+
+        // Set odometry pod offsets in INCHES relative to center of robot
+        pinpoint.setOffsets( 25.4*xPodOffsetInches, 25.4*yPodOffsetInches, DistanceUnit.MM);
+
+        // Set encoder pod model and directions
+        pinpoint.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        pinpoint.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.REVERSED);
+
+        // Reset IMU and position, then wait 300ms for onboard IMU calibration to complete
+        pinpoint.resetPosAndIMU();
+        sleep(500);
+
+        // Assign initial starting pose in INCHES and DEGREES
+        pinpoint.setPosition(new Pose2D(DistanceUnit.INCH, startXInches, startYInches, AngleUnit.DEGREES, startHeadingDegrees));
+    }
+
+    // Moves the flower bar to STOWED, RUNNING, or GATHERING and remembers the state
+    private void setFlowerBar(int state) {
+        flowerBarState = state;
+        if (state == FLOWER_BAR_STOWED) {
+            flowerBar.setPosition(flowerBarStowedPosition);
+        } else if (state == FLOWER_BAR_RUNNING) {
+            flowerBar.setPosition(flowerBarRunningPosition);
+        } else {
+            flowerBar.setPosition(flowerBarGatheringPosition);
+        }
+    }
+
+    private String flowerBarStateName() {
+        if (flowerBarState == FLOWER_BAR_STOWED) return "STOWED";
+        if (flowerBarState == FLOWER_BAR_RUNNING) return "RUNNING";
+        return "GATHERING";
+    }
+
+    // Debounce function for button toggles
+    private boolean isPressed(boolean currentState, int buttonIndex) {
+        double now = runtime.milliseconds();
+        if (currentState && !buttonLastState[buttonIndex] && (now - buttonLastPressTime[buttonIndex] > 100)) {
+            buttonLastState[buttonIndex] = true;
+            buttonLastPressTime[buttonIndex] = now;
+            return true;
+        }
+        if (!currentState) {
+            buttonLastState[buttonIndex] = false;
+        }
+        return false;
+    }
+
+    /**
+     * Calculates heading in radians so the rearward-facing ball launcher exit point (-9in X, -4in Y)
+     * aims directly at the center of the nearest hive opening.
+     */
+    private double calculateHeadingForLauncherAim(double robotX, double robotY, double robotHeading) {
+        // Transform launcher exit offset (match2 robot was -9.0 in X, -4.0 in Y) into field coordinates
+        double launcherX = robotX + laucherToRobotCenterX * Math.cos(robotHeading) - laucherToRobotCenterY * Math.sin(robotHeading);
+        double launcherY = robotY + laucherToRobotCenterX * Math.sin(robotHeading) + laucherToRobotCenterY * Math.cos(robotHeading);
+
+        // Distance to Hive 1 (-12.75, -16.84)
+        double hive1X = -12.75;
+        double hive1Y = -16.84;
+        double dx1 = launcherX - hive1X;
+        double dy1 = launcherY - hive1Y;
+        double dist1Sq = dx1 * dx1 + dy1 * dy1;
+
+        // Distance to Hive 2 (-12.75, +16.84)
+        double hive2X = -12.75;
+        double hive2Y = 16.84;
+        double dx2 = launcherX - hive2X;
+        double dy2 = launcherY - hive2Y;
+        double dist2Sq = dx2 * dx2 + dy2 * dy2;
+
+        // Pick whichever hive is closer to launcher
+        double bestHiveX = hive1X;
+        double bestHiveY = hive1Y;
+        double bestDistSq = dist1Sq;
+        if (dist2Sq < dist1Sq) {
+            bestHiveX = hive2X;
+            bestHiveY = hive2Y;
+            bestDistSq = dist2Sq;
+        }
+
+        // Update global target distance to hive opening (in inches)
+        targetDistanceInches = Math.sqrt(bestDistSq);
+
+        // Heading so rearward launcher (-X_robot) points at target:
+        return Math.atan2(launcherY - bestHiveY, launcherX - bestHiveX);
+    }
+
+    /**
+     * Looks at all AprilTags the Limelight sees and picks the one closest to the center of the
+     * camera view. Red tags are IDs 30-37, blue tags are IDs 38-45.
+     * Needs Pipeline 0 (all tags) to be active.
+     * @return "RED", "BLUE", or "NONE" if no hive tag is seen
+     */
+    private String detectAllianceColor() {
+        if (limelight == null) {
+            return "NONE";
+        }
+
+        LLResult llResult = limelight.getLatestResult();
+        if (llResult == null || !llResult.isValid()) {
+            return "NONE";
+        }
+
+        int closestTagId = -1;
+        double closestOffsetDegrees = Double.MAX_VALUE;
+        for (LLResultTypes.FiducialResult fiducial : llResult.getFiducialResults()) {
+            // Angle between the tag and the center of the camera view
+            double offsetDegrees = Math.hypot(fiducial.getTargetXDegrees(), fiducial.getTargetYDegrees());
+            if (offsetDegrees < closestOffsetDegrees) {
+                closestOffsetDegrees = offsetDegrees;
+                closestTagId = fiducial.getFiducialId();
+            }
+        }
+
+        if (closestTagId >= 30 && closestTagId <= 37) {
+            return "RED";
+        } else if (closestTagId >= 38 && closestTagId <= 45) {
+            return "BLUE";
+        }
+        return "NONE";
+    }
+
+    /**
+     * Switches the Limelight to the pipeline that only sees our alliance's tags.
+     * Pipeline 1 = red tags only, Pipeline 2 = blue tags only.
+     * If the alliance is NONE, does nothing.
+     */
+    private void selectAlliancePipeline() {
+        if (limelight == null) {
+            return;
+        }
+        if (allianceColor.equals("RED")) {
+            limelight.pipelineSwitch(1);
+        } else if (allianceColor.equals("BLUE")) {
+            limelight.pipelineSwitch(2);
+        }
+    }
+
+    /**
+     * Calculates target heading in radians using Limelight 3D pose if at least 3 fiducials are detected.
+     * Also updates global targetDistanceInches.
+     * @param currentRobotHeadingRad Current robot heading in radians
+     * @return Target heading in radians if at least 3 tags found, or Double.NaN if unavailable
+     */
+    private double calculateHeadingFromLimelight(double currentRobotHeadingRad) {
+        if (limelight == null) {
+            return Double.NaN;
+        }
+
+        LLResult llResult = limelight.getLatestResult();
+        if (llResult == null || !llResult.isValid()) {
+            return Double.NaN;
+        }
+
+        // Must detect AT LEAST 3 fiducials (tags) to consider Limelight calculation valid
+        if (llResult.getBotposeTagCount() < 3) {
+            return Double.NaN;
+        }
+
+        Pose3D targetPose = llResult.getBotpose();
+        if (targetPose == null) {
+            return Double.NaN;
+        }
+
+        // Calculate 2D horizontal ground distance in inches (x, y in meters)
+        double distMeters = Math.hypot(targetPose.getPosition().x, targetPose.getPosition().y);
+        targetDistanceInches = distMeters * 39.3701;
+
+        double yawDegrees = targetPose.getOrientation().getYaw(AngleUnit.DEGREES);
+        //return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(yawDegrees));
+
+        // METHOD B (see "Method B" in HiveCenterLimelightTest): to switch, comment out the
+        // return line above and uncomment the lines below. Treats yaw as the launcher's facing
+        // in the hive frame and gets the direction to the hive from X/Y instead.
+        // If the robot aims ~180 deg off, change turnDegrees to (bearingDegrees - yawDegrees + 180.0).
+        double bearingDegrees = Math.toDegrees(Math.atan2(-targetPose.getPosition().y, -targetPose.getPosition().x));
+        double turnDegrees = AngleUnit.normalizeDegrees(bearingDegrees - yawDegrees);
+        return AngleUnit.normalizeRadians(currentRobotHeadingRad + Math.toRadians(turnDegrees));
+    }
+}
